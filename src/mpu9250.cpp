@@ -162,6 +162,23 @@ bool Mpu9250::DisableDrdyInt() {
   }
   return true;
 }
+
+void Mpu9250::getScales(float *accScale, float *gyroScale, float *magScale){
+  *accScale = accel_scale_;
+  *gyroScale = gyro_scale_;
+  magScale[0] = mag_scale_[0];
+  magScale[1] = mag_scale_[1];
+  magScale[2] = mag_scale_[2];
+/*  
+  Serial.print("Accelerometer Scale: "); Serial.println(accel_scale_, 5);
+  Serial.print("Gyro Scale: "); Serial.println(gyro_scale_, 5);
+  Serial.println("Magnetometer Scales:");
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[0],5);
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[1],5);
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[2],5);
+  */
+}
+
 bool Mpu9250::ConfigAccelRange(const AccelRange range) {
   spi_clock_ = SPI_CFG_CLOCK_;
   /* Check input is valid and set requested range and scale */
@@ -421,6 +438,98 @@ bool Mpu9250::Read() {
   }
   return true;
 }
+
+bool Mpu9250::Read(float * values) {
+  spi_clock_ = SPI_READ_CLOCK_;
+  /* Reset the new data flags */
+  new_mag_data_ = false;
+  new_imu_data_ = false;
+  /* Read the data registers */
+  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
+    return false;
+  }
+  /* Check if data is ready */
+  new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
+  if (!new_imu_data_) {
+    return false;
+  }
+  /* Unpack the buffer */
+  accel_cnts_[0] = static_cast<int16_t>(data_buf_[1])  << 8 | data_buf_[2];
+  accel_cnts_[1] = static_cast<int16_t>(data_buf_[3])  << 8 | data_buf_[4];
+  accel_cnts_[2] = static_cast<int16_t>(data_buf_[5])  << 8 | data_buf_[6];
+  temp_cnts_ =     static_cast<int16_t>(data_buf_[7])  << 8 | data_buf_[8];
+  gyro_cnts_[0] =  static_cast<int16_t>(data_buf_[9])  << 8 | data_buf_[10];
+  gyro_cnts_[1] =  static_cast<int16_t>(data_buf_[11]) << 8 | data_buf_[12];
+  gyro_cnts_[2] =  static_cast<int16_t>(data_buf_[13]) << 8 | data_buf_[14];
+  new_mag_data_ = (data_buf_[15] & AK8963_DATA_RDY_INT_);
+  mag_cnts_[0] =   static_cast<int16_t>(data_buf_[17]) << 8 | data_buf_[16];
+  mag_cnts_[1] =   static_cast<int16_t>(data_buf_[19]) << 8 | data_buf_[18];
+  mag_cnts_[2] =   static_cast<int16_t>(data_buf_[21]) << 8 | data_buf_[20];
+  /* Check for mag overflow */
+  mag_sensor_overflow_ = (data_buf_[22] & AK8963_HOFL_);
+  if (mag_sensor_overflow_) {
+    new_mag_data_ = false;
+  }
+  /* Convert to float values and rotate the accel / gyro axis */
+  values[0] = static_cast<float>(accel_cnts_[1]) * accel_scale_ ;
+  values[1] = static_cast<float>(accel_cnts_[0]) * accel_scale_ ;
+  values[2] = static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f;
+  values[9] = (static_cast<float>(temp_cnts_) - 21.0f) / TEMP_SCALE_ + 21.0f;
+  values[3] = static_cast<float>(gyro_cnts_[1]) * gyro_scale_ ;
+  values[4] = static_cast<float>(gyro_cnts_[0]) * gyro_scale_ ;
+  values[5] = static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f ;
+  /* Only update on new data */
+  if (new_mag_data_) {
+    values[6] =   static_cast<float>(mag_cnts_[0]) * mag_scale_[0];
+    values[7] =   static_cast<float>(mag_cnts_[1]) * mag_scale_[1];
+    values[8] =   static_cast<float>(mag_cnts_[2]) * mag_scale_[2];
+  }
+  return true;
+}
+
+bool Mpu9250::Read_raw(int16_t * values) {
+  spi_clock_ = SPI_READ_CLOCK_;
+  /* Reset the new data flags */
+  new_mag_data_ = false;
+  new_imu_data_ = false;
+  /* Read the data registers */
+  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
+    return false;
+  }
+  /* Check if data is ready */
+  new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
+  if (!new_imu_data_) {
+    return false;
+  }
+  /* Unpack the buffer */
+  //Accel
+  values[0] = static_cast<int16_t>(data_buf_[1])  << 8 | data_buf_[2];
+  values[1] = static_cast<int16_t>(data_buf_[3])  << 8 | data_buf_[4];
+  values[2] = static_cast<int16_t>(data_buf_[5])  << 8 | data_buf_[6];
+  temp_cnts_ =     static_cast<int16_t>(data_buf_[7])  << 8 | data_buf_[8];
+  //Gyro
+  values[3] =  static_cast<int16_t>(data_buf_[9])  << 8 | data_buf_[10];
+  values[4] =  static_cast<int16_t>(data_buf_[11]) << 8 | data_buf_[12];
+  values[5] =  static_cast<int16_t>(data_buf_[13]) << 8 | data_buf_[14];
+  new_mag_data_ = (data_buf_[15] & AK8963_DATA_RDY_INT_);
+  mag_cnts_[0] =   static_cast<int16_t>(data_buf_[17]) << 8 | data_buf_[16];
+  mag_cnts_[1] =   static_cast<int16_t>(data_buf_[19]) << 8 | data_buf_[18];
+  mag_cnts_[2] =   static_cast<int16_t>(data_buf_[21]) << 8 | data_buf_[20];
+  /* Check for mag overflow */
+  mag_sensor_overflow_ = (data_buf_[22] & AK8963_HOFL_);
+  if (mag_sensor_overflow_) {
+    new_mag_data_ = false;
+  }
+
+  /* Only update on new data */
+  if (new_mag_data_) {
+    values[6] =   (mag_cnts_[0]);
+    values[7] =   (mag_cnts_[1]);
+    values[8] =   (mag_cnts_[2]);
+  }
+  return true;
+}
+
 bool Mpu9250::WriteRegister(const uint8_t reg, const uint8_t data) {
   return imu_.WriteRegister(reg, data, spi_clock_);
 }

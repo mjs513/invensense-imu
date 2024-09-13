@@ -101,6 +101,9 @@ class Mpu9250 {
   bool EnableWom(int16_t threshold_mg, const WomRate wom_rate);
   void Reset();
   bool Read();
+  bool Read(float * values);
+  void getScales(float *accScale, float *gyroScale, float *magScale);
+  bool Read_raw(int16_t * values);
   inline bool new_imu_data() const {return new_imu_data_;}
   inline float accel_x_mps2() const {return accel_[0];}
   inline float accel_y_mps2() const {return accel_[1];}
