@@ -2,7 +2,7 @@
 * Brian R Taylor
 * brian.taylor@bolderflight.com
 * 
-* Copyright (c) 2022 Bolder Flight Systems Inc
+* Copyright (c) 2024 Bolder Flight Systems Inc
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the “Software”), to
@@ -32,14 +32,14 @@ void InvensenseImu::Config(TwoWire *i2c, const uint8_t addr) {
   dev_ = addr;
   iface_ = I2C;
 }
-
 void InvensenseImu::Config(SPIClass *spi, const uint8_t cs) {
   spi_ = spi;
   dev_ = cs;
   iface_ = SPI;
 }
-
 void InvensenseImu::Begin() {
+  /* Wait the minimum startup time for register read / write */
+  delay(500);
   if (iface_ == SPI) {
     pinMode(dev_, OUTPUT);
     /* Toggle CS pin to lock in SPI mode */
@@ -49,7 +49,6 @@ void InvensenseImu::Begin() {
     delay(1);
   }
 }
-
 bool InvensenseImu::WriteRegister(const uint8_t reg, const uint8_t data,
                                   const int32_t spi_clock) {
   uint8_t ret_val;
@@ -88,7 +87,6 @@ bool InvensenseImu::WriteRegister(const uint8_t reg, const uint8_t data,
     return false;
   }
 }
-
 bool InvensenseImu::ReadRegisters(const uint8_t reg, const uint8_t count,
                                   const int32_t spi_clock,
                                   uint8_t * const data) {
@@ -130,21 +128,55 @@ bool InvensenseImu::ReadRegisters(const uint8_t reg, const uint8_t count,
     return true;
   }
 }
-
-bool InvensenseImu::WriteRegister(const uint8_t reg, const uint8_t data) {
+bool InvensenseImu::ReadFifo(const uint8_t reg, const uint8_t count,
+                             const int32_t spi_clock,
+                             uint8_t * const data) {
+  if (!data) {return false;}
   if (iface_ == I2C) {
-    return WriteRegister(reg, data, 0);
+    i2c_->beginTransmission(dev_);
+    i2c_->write(reg);
+    i2c_->endTransmission(false);
+    bytes_rx_ = i2c_->requestFrom(static_cast<uint8_t>(dev_), count);
+    if (bytes_rx_ == count) {
+      for (size_t i = 0; i < count; i++) {
+        data[i] = i2c_->read();
+      }
+      return true;
+    } else {
+      return false;
+    }
   } else {
-    return false;
-  }
-}
-
-bool InvensenseImu::ReadRegisters(const uint8_t reg, const uint8_t count,
-                                  uint8_t * const data) {
-  if (iface_ == I2C) {
-    return ReadRegisters(reg, count, 0, data);
-  } else {
-    return false;
+    spi_->beginTransaction(SPISettings(spi_clock, MSBFIRST, SPI_MODE3));
+    #if defined(TEENSYDUINO)
+    digitalWriteFast(dev_, LOW);
+    #else
+    digitalWrite(dev_, LOW);
+    #endif
+    #if defined(__IMXRT1062__)
+      delayNanoseconds(125);
+    #endif
+    spi_->transfer(reg | SPI_READ_);
+    #if defined(__IMXRT1062__)
+      delayNanoseconds(125);
+    #endif
+    #if defined(__IMXRT1062__)
+    for (uint8_t i = 0; i < count; i++) {
+      data[i] = spi_->transfer(0x00);
+      delayNanoseconds(125);
+    }
+    #else
+    spi_->transfer(data, count);
+    #endif
+    #if defined(TEENSYDUINO)
+    digitalWriteFast(dev_, HIGH);
+    #else
+    digitalWrite(dev_, HIGH);
+    #endif
+    #if defined(__IMXRT1062__)
+      delayNanoseconds(125);
+    #endif
+    spi_->endTransaction();
+    return true;
   }
 }
 

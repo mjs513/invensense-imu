@@ -2,7 +2,7 @@
 * Brian R Taylor
 * brian.taylor@bolderflight.com
 * 
-* Copyright (c) 2022 Bolder Flight Systems Inc
+* Copyright (c) 2024 Bolder Flight Systems Inc
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the “Software”), to
@@ -39,34 +39,53 @@ namespace bfs {
 
 void Mpu9250::Config(TwoWire *i2c, const I2cAddr addr) {
   imu_.Config(i2c, static_cast<uint8_t>(addr));
+  iface_ = I2C;
 }
 void Mpu9250::Config(SPIClass *spi, const uint8_t cs) {
   imu_.Config(spi, cs);
+  iface_ = SPI;
 }
 bool Mpu9250::Begin() {
+  return Begin(MAG_ENABLED);
+}
+bool Mpu9250::Begin(const MagMode mode) {
+  mag_mode_ = mode;
   imu_.Begin();
   /* 1 MHz for config */
   spi_clock_ = SPI_CFG_CLOCK_;
+  if (iface_ == SPI) {
+    /* I2C IF DIS */
+    WriteRegister(USER_CTRL_, I2C_IF_DIS_);
+  }
   /* Select clock source to gyro */
   if (!WriteRegister(PWR_MGMNT_1_, CLKSEL_PLL_)) {
     return false;
   }
-  /* Enable I2C master mode */
-  if (!WriteRegister(USER_CTRL_, I2C_MST_EN_)) {
-    return false;
+  if (mag_mode_ == MAG_ENABLED) {
+    /* Enable I2C master mode */
+    if (!WriteRegister(USER_CTRL_, I2C_MST_EN_)) {
+      return false;
+    }
+    /* Set the I2C bus speed to 400 kHz */
+    if (!WriteRegister(I2C_MST_CTRL_, I2C_MST_CLK_)) {
+      return false;
+    }
+    /* Set AK8963 to power down */
+    WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
   }
-  /* Set the I2C bus speed to 400 kHz */
-  if (!WriteRegister(I2C_MST_CTRL_, I2C_MST_CLK_)) {
-    return false;
-  }
-  /* Set AK8963 to power down */
-  WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
   /* Reset the MPU9250 */
   WriteRegister(PWR_MGMNT_1_, H_RESET_);
   /* Wait for MPU-9250 to come back up */
-  delay(1);
-  /* Reset the AK8963 */
-  WriteAk8963Register(AK8963_CNTL2_, AK8963_RESET_);
+  delay(100);
+  if (iface_ == SPI) {
+    /* I2C IF DIS */
+    WriteRegister(USER_CTRL_, I2C_IF_DIS_);
+  }
+  if (mag_mode_ == MAG_ENABLED) {
+    /* Reset the AK8963 */
+    WriteAk8963Register(AK8963_CNTL2_, AK8963_RESET_);
+    delay(100);
+  }
   /* Select clock source to gyro */
   if (!WriteRegister(PWR_MGMNT_1_, CLKSEL_PLL_)) {
     return false;
@@ -78,51 +97,53 @@ bool Mpu9250::Begin() {
   if ((who_am_i_ != WHOAMI_MPU9250_) && (who_am_i_ != WHOAMI_MPU9255_)) {
     return false;
   }
-  /* Enable I2C master mode */
-  if (!WriteRegister(USER_CTRL_, I2C_MST_EN_)) {
-    return false;
+  if (mag_mode_ == MAG_ENABLED) {
+    /* Enable I2C master mode */
+    if (!WriteRegister(USER_CTRL_, I2C_MST_EN_)) {
+      return false;
+    }
+    /* Set the I2C bus speed to 400 kHz */
+    if (!WriteRegister(I2C_MST_CTRL_, I2C_MST_CLK_)) {
+      return false;
+    }
+    /* Check the AK8963 WHOAMI */
+    if (!ReadAk8963Registers(AK8963_WHOAMI_, sizeof(who_am_i_), &who_am_i_)) {
+      return false;
+    }
+    if (who_am_i_ != WHOAMI_AK8963_) {
+      return false;
+    }
+    /* Get the magnetometer calibration */
+    /* Set AK8963 to power down */
+    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_)) {
+      return false;
+    }
+    delay(100);  // long wait between AK8963 mode changes
+    /* Set AK8963 to FUSE ROM access */
+    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_FUSE_ROM_)) {
+      return false;
+    }
+    delay(100);  // long wait between AK8963 mode changes
+    /* Read the AK8963 ASA registers and compute magnetometer scale factors */
+    if (!ReadAk8963Registers(AK8963_ASA_, sizeof(asa_buff_), asa_buff_)) {
+      return false;
+    }
+    mag_scale_[0] = ((static_cast<float>(asa_buff_[0]) - 128.0f)
+      / 256.0f + 1.0f) * 4912.0f / 32760.0f;
+    mag_scale_[1] = ((static_cast<float>(asa_buff_[1]) - 128.0f)
+      / 256.0f + 1.0f) * 4912.0f / 32760.0f;
+    mag_scale_[2] = ((static_cast<float>(asa_buff_[2]) - 128.0f)
+      / 256.0f + 1.0f) * 4912.0f / 32760.0f;
+    /* Set AK8963 to power down */
+    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_)) {
+      return false;
+    }
+    /* Set AK8963 to 16 bit resolution, 100 Hz update rate */
+    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS2_)) {
+      return false;
+    }
+    delay(100);  // long wait between AK8963 mode changes
   }
-  /* Set the I2C bus speed to 400 kHz */
-  if (!WriteRegister(I2C_MST_CTRL_, I2C_MST_CLK_)) {
-    return false;
-  }
-  /* Check the AK8963 WHOAMI */
-  if (!ReadAk8963Registers(AK8963_WHOAMI_, sizeof(who_am_i_), &who_am_i_)) {
-    return false;
-  }
-  if (who_am_i_ != WHOAMI_AK8963_) {
-    return false;
-  }
-  /* Get the magnetometer calibration */
-  /* Set AK8963 to power down */
-  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_)) {
-    return false;
-  }
-  delay(100);  // long wait between AK8963 mode changes
-  /* Set AK8963 to FUSE ROM access */
-  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_FUSE_ROM_)) {
-    return false;
-  }
-  delay(100);  // long wait between AK8963 mode changes
-  /* Read the AK8963 ASA registers and compute magnetometer scale factors */
-  if (!ReadAk8963Registers(AK8963_ASA_, sizeof(asa_buff_), asa_buff_)) {
-    return false;
-  }
-  mag_scale_[0] = ((static_cast<float>(asa_buff_[0]) - 128.0f)
-    / 256.0f + 1.0f) * 4912.0f / 32760.0f;
-  mag_scale_[1] = ((static_cast<float>(asa_buff_[1]) - 128.0f)
-    / 256.0f + 1.0f) * 4912.0f / 32760.0f;
-  mag_scale_[2] = ((static_cast<float>(asa_buff_[2]) - 128.0f)
-    / 256.0f + 1.0f) * 4912.0f / 32760.0f;
-  /* Set AK8963 to power down */
-  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_)) {
-    return false;
-  }
-  /* Set AK8963 to 16 bit resolution, 100 Hz update rate */
-  if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS2_)) {
-    return false;
-  }
-  delay(100);  // long wait between AK8963 mode changes
   /* Select clock source to gyro */
   if (!WriteRegister(PWR_MGMNT_1_, CLKSEL_PLL_)) {
     return false;
@@ -143,13 +164,26 @@ bool Mpu9250::Begin() {
   if (!ConfigSrd(0)) {
     return false;
   }
+  /* Setup the I2C passthrough */
+  if (mag_mode_ == MAG_PASSTHROUGH) {
+    if (!WriteRegister(INT_PIN_CFG_, I2C_BYPASS_EN_)) {
+      return false;
+    }
+  }
   return true;
 }
 bool Mpu9250::EnableDrdyInt() {
   spi_clock_ = SPI_CFG_CLOCK_;
-  if (!WriteRegister(INT_PIN_CFG_, INT_PULSE_50US_)) {
-    return false;
+  if (mag_mode_ == MAG_PASSTHROUGH) {
+    if (!WriteRegister(INT_PIN_CFG_, INT_PULSE_50US_ | I2C_BYPASS_EN_)) {
+      return false;
+    }
+  } else {
+    if (!WriteRegister(INT_PIN_CFG_, INT_PULSE_50US_)) {
+      return false;
+    }
   }
+
   if (!WriteRegister(INT_ENABLE_, INT_RAW_RDY_EN_)) {
     return false;
   }
@@ -162,23 +196,41 @@ bool Mpu9250::DisableDrdyInt() {
   }
   return true;
 }
-
-void Mpu9250::getScales(float *accScale, float *gyroScale, float *magScale){
-  *accScale = accel_scale_;
-  *gyroScale = gyro_scale_;
-  magScale[0] = mag_scale_[0];
-  magScale[1] = mag_scale_[1];
-  magScale[2] = mag_scale_[2];
-/*  
-  Serial.print("Accelerometer Scale: "); Serial.println(accel_scale_, 5);
-  Serial.print("Gyro Scale: "); Serial.println(gyro_scale_, 5);
-  Serial.println("Magnetometer Scales:");
-  Serial.print("\tMagx: "); Serial.println(mag_scale_[0],5);
-  Serial.print("\tMagx: "); Serial.println(mag_scale_[1],5);
-  Serial.print("\tMagx: "); Serial.println(mag_scale_[2],5);
-  */
+bool Mpu9250::EnableFifo() {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  if (mag_mode_ == MAG_ENABLED) { 
+    if (!WriteRegister(USER_CTRL_, USER_CTRL_FIFO_EN_ | I2C_MST_EN_)) {
+      return false;
+    }
+    if (!WriteRegister(FIFO_EN_, FIFO_EN_GYRO_ | FIFO_EN_ACCEL_ | FIFO_EN_MAG_)) {
+      return false;
+    }
+  } else {
+    if (!WriteRegister(USER_CTRL_, USER_CTRL_FIFO_EN_)) {
+      return false;
+    }
+    if (!WriteRegister(FIFO_EN_, FIFO_EN_GYRO_ | FIFO_EN_ACCEL_)) {
+      return false;
+    }
+  }
+  return true;
 }
-
+bool Mpu9250::DisableFifo() {
+  spi_clock_ = SPI_CFG_CLOCK_;
+  if (mag_mode_ == MAG_ENABLED) {
+    if (!WriteRegister(USER_CTRL_, USER_CTRL_FIFO_DISABLE_ | I2C_MST_EN_)) {
+      return false;
+    }
+  } else {
+    if (!WriteRegister(USER_CTRL_, USER_CTRL_FIFO_DISABLE_)) {
+      return false;
+    }
+  }
+  if (!WriteRegister(FIFO_EN_, FIF_EN_DISABLE_ALL_)) {
+    return false;
+  }
+  return true;
+}
 bool Mpu9250::ConfigAccelRange(const AccelRange range) {
   spi_clock_ = SPI_CFG_CLOCK_;
   /* Check input is valid and set requested range and scale */
@@ -255,34 +307,36 @@ bool Mpu9250::ConfigGyroRange(const GyroRange range) {
 }
 bool Mpu9250::ConfigSrd(const uint8_t srd) {
   spi_clock_ = SPI_CFG_CLOCK_;
-  /* Changing the SRD to allow us to set the magnetometer successfully */
-  if (!WriteRegister(SMPLRT_DIV_, 19)) {
-    return false;
-  }
-  /* Set the magnetometer sample rate */
-  if (srd > 9) {
-    /* Set AK8963 to power down */
-    WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
-    delay(100);  // long wait between AK8963 mode changes
-    /* Set AK8963 to 16 bit resolution, 8 Hz update rate */
-    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS1_)) {
+  if (mag_mode_ == MAG_ENABLED) {
+    /* Changing the SRD to allow us to set the magnetometer successfully */
+    if (!WriteRegister(SMPLRT_DIV_, 19)) {
       return false;
     }
-    delay(100);  // long wait between AK8963 mode changes
-    if (!ReadAk8963Registers(AK8963_ST1_, sizeof(mag_data_), mag_data_)) {
-      return false;
-    }
-  } else {
-    /* Set AK8963 to power down */
-    WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
-    delay(100);  // long wait between AK8963 mode changes
-    /* Set AK8963 to 16 bit resolution, 100 Hz update rate */
-    if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS2_)) {
-      return false;
-    }
-    delay(100);  // long wait between AK8963 mode changes
-    if (!ReadAk8963Registers(AK8963_ST1_, sizeof(mag_data_), mag_data_)) {
-      return false;
+    /* Set the magnetometer sample rate */
+    if (srd > 9) {
+      /* Set AK8963 to power down */
+      WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
+      delay(100);  // long wait between AK8963 mode changes
+      /* Set AK8963 to 16 bit resolution, 8 Hz update rate */
+      if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS1_)) {
+        return false;
+      }
+      delay(100);  // long wait between AK8963 mode changes
+      if (!ReadAk8963Registers(AK8963_ST1_, sizeof(mag_data_), mag_data_)) {
+        return false;
+      }
+    } else {
+      /* Set AK8963 to power down */
+      WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
+      delay(100);  // long wait between AK8963 mode changes
+      /* Set AK8963 to 16 bit resolution, 100 Hz update rate */
+      if (!WriteAk8963Register(AK8963_CNTL1_, AK8963_CNT_MEAS2_)) {
+        return false;
+      }
+      delay(100);  // long wait between AK8963 mode changes
+      if (!ReadAk8963Registers(AK8963_ST1_, sizeof(mag_data_), mag_data_)) {
+        return false;
+      }
     }
   }
   /* Set the IMU sample rate */
@@ -381,23 +435,20 @@ bool Mpu9250::EnableWom(int16_t threshold_mg, const WomRate wom_rate) {
   }
   return true;
 }
-void Mpu9250::Reset() {
-  spi_clock_ = SPI_CFG_CLOCK_;
-  /* Set AK8963 to power down */
-  WriteAk8963Register(AK8963_CNTL1_, AK8963_PWR_DOWN_);
-  /* Reset the MPU9250 */
-  WriteRegister(PWR_MGMNT_1_, H_RESET_);
-  /* Wait for MPU-9250 to come back up */
-  delay(1);
-}
 bool Mpu9250::Read() {
   spi_clock_ = SPI_READ_CLOCK_;
   /* Reset the new data flags */
   new_mag_data_ = false;
   new_imu_data_ = false;
   /* Read the data registers */
-  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
-    return false;
+  if (mag_mode_ == MAG_ENABLED) {
+    if (!ReadRegisters(INT_STATUS_, 23, data_buf_)) {
+      return false;
+    }
+  } else {
+    if (!ReadRegisters(INT_STATUS_, 15, data_buf_)) {
+      return false;
+    }
   }
   /* Check if data is ready */
   new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
@@ -412,14 +463,16 @@ bool Mpu9250::Read() {
   gyro_cnts_[0] =  static_cast<int16_t>(data_buf_[9])  << 8 | data_buf_[10];
   gyro_cnts_[1] =  static_cast<int16_t>(data_buf_[11]) << 8 | data_buf_[12];
   gyro_cnts_[2] =  static_cast<int16_t>(data_buf_[13]) << 8 | data_buf_[14];
-  new_mag_data_ = (data_buf_[15] & AK8963_DATA_RDY_INT_);
-  mag_cnts_[0] =   static_cast<int16_t>(data_buf_[17]) << 8 | data_buf_[16];
-  mag_cnts_[1] =   static_cast<int16_t>(data_buf_[19]) << 8 | data_buf_[18];
-  mag_cnts_[2] =   static_cast<int16_t>(data_buf_[21]) << 8 | data_buf_[20];
-  /* Check for mag overflow */
-  mag_sensor_overflow_ = (data_buf_[22] & AK8963_HOFL_);
-  if (mag_sensor_overflow_) {
-    new_mag_data_ = false;
+  if (mag_mode_ == MAG_ENABLED) {
+    new_mag_data_ = (data_buf_[15] & AK8963_DATA_RDY_INT_);
+    mag_cnts_[0] =   static_cast<int16_t>(data_buf_[17]) << 8 | data_buf_[16];
+    mag_cnts_[1] =   static_cast<int16_t>(data_buf_[19]) << 8 | data_buf_[18];
+    mag_cnts_[2] =   static_cast<int16_t>(data_buf_[21]) << 8 | data_buf_[20];
+    /* Check for mag overflow */
+    mag_sensor_overflow_ = (data_buf_[22] & AK8963_HOFL_);
+    if (mag_sensor_overflow_) {
+      new_mag_data_ = false;
+    }
   }
   /* Convert to float values and rotate the accel / gyro axis */
   accel_[0] = static_cast<float>(accel_cnts_[1]) * accel_scale_ * G_MPS2_;
@@ -431,13 +484,16 @@ bool Mpu9250::Read() {
   gyro_[1] = static_cast<float>(gyro_cnts_[0]) * gyro_scale_ * DEG2RAD_;
   gyro_[2] = static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f * DEG2RAD_;
   /* Only update on new data */
-  if (new_mag_data_) {
-    mag_[0] =   static_cast<float>(mag_cnts_[0]) * mag_scale_[0];
-    mag_[1] =   static_cast<float>(mag_cnts_[1]) * mag_scale_[1];
-    mag_[2] =   static_cast<float>(mag_cnts_[2]) * mag_scale_[2];
+  if (mag_mode_ == MAG_ENABLED) {
+    if (new_mag_data_) {
+      mag_[0] =   static_cast<float>(mag_cnts_[0]) * mag_scale_[0];
+      mag_[1] =   static_cast<float>(mag_cnts_[1]) * mag_scale_[1];
+      mag_[2] =   static_cast<float>(mag_cnts_[2]) * mag_scale_[2];
+    }
   }
   return true;
 }
+
 
 bool Mpu9250::Read(float * values) {
   spi_clock_ = SPI_READ_CLOCK_;
@@ -445,8 +501,14 @@ bool Mpu9250::Read(float * values) {
   new_mag_data_ = false;
   new_imu_data_ = false;
   /* Read the data registers */
-  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
-    return false;
+  if (mag_mode_ == MAG_ENABLED) {
+    if (!ReadRegisters(INT_STATUS_, 23, data_buf_)) {
+      return false;
+    }
+  } else {
+    if (!ReadRegisters(INT_STATUS_, 15, data_buf_)) {
+      return false;
+    }
   }
   /* Check if data is ready */
   new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
@@ -493,8 +555,14 @@ bool Mpu9250::Read_raw(int16_t * values) {
   new_mag_data_ = false;
   new_imu_data_ = false;
   /* Read the data registers */
-  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
-    return false;
+  if (mag_mode_ == MAG_ENABLED) {
+    if (!ReadRegisters(INT_STATUS_, 23, data_buf_)) {
+      return false;
+    }
+  } else {
+    if (!ReadRegisters(INT_STATUS_, 15, data_buf_)) {
+      return false;
+    }
   }
   /* Check if data is ready */
   new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
@@ -530,12 +598,114 @@ bool Mpu9250::Read_raw(int16_t * values) {
   return true;
 }
 
+
+int16_t Mpu9250::ReadFifo(uint8_t * const data, const size_t len) {
+  spi_clock_ = SPI_READ_CLOCK_;
+  if (!data) {
+    return -1;
+  }
+  /* Read the FIFO interrupt */
+  if (!ReadRegisters(INT_STATUS_, 1, data_buf_)) {
+    return -1;
+  }
+  /* Check for fifo overflow */
+  fifo_overflowed_ = (data_buf_[0] & FIFO_OFLOW_INT_);
+  /* FIFO Count */
+  if (!ReadRegisters(FIFO_COUNT_H_, 2, data_buf_)) {
+    return -1;
+  }
+  fifo_count_ = static_cast<int16_t>(data_buf_[0]) << 8 | data_buf_[1];
+  if (fifo_count_ > 0) {
+    if (len < fifo_count_) {
+      bytes_to_read_ = len;
+    } else {
+      bytes_to_read_ = fifo_count_;
+    }
+    if (!ReadFifo(FIFO_R_W_, bytes_to_read_, data)) {
+      return -1;
+    }
+    return bytes_to_read_;
+  } else {
+    return 0;
+  }
+}
+int16_t Mpu9250::ProcessFifoData(uint8_t * const data, const size_t len,
+                                 float * const gx, float * const gy, float * const gz,
+                                 float * const ax, float * const ay, float * const az) {
+  if ((!data) || (!gx) || (!gy) || (!gz) || (!ax) || (!ay) || (!az)) {
+    return -1;
+  }
+  size_t j = 0;
+  for (size_t i = 0; i < len; i = i + 12) {
+    /* Unpack the buffer */
+    accel_cnts_[0] = static_cast<int16_t>(data[i + 0])  << 8 | data[i + 1];
+    accel_cnts_[1] = static_cast<int16_t>(data[i + 2])  << 8 | data[i + 3];
+    accel_cnts_[2] = static_cast<int16_t>(data[i + 4])  << 8 | data[i + 5];
+    gyro_cnts_[0] =  static_cast<int16_t>(data[i + 6])  << 8 | data[i + 7];
+    gyro_cnts_[1] =  static_cast<int16_t>(data[i + 8]) << 8 | data[i + 9];
+    gyro_cnts_[2] =  static_cast<int16_t>(data[i + 10]) << 8 | data[i + 11];
+    /* Convert to float values and rotate the accel / gyro axis */
+    ax[j] = static_cast<float>(accel_cnts_[1]) * accel_scale_ * G_MPS2_;
+    ay[j] = static_cast<float>(accel_cnts_[0]) * accel_scale_ * G_MPS2_;
+    az[j] = static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f * G_MPS2_;
+    gx[j] = static_cast<float>(gyro_cnts_[1]) * gyro_scale_ * DEG2RAD_;
+    gy[j] = static_cast<float>(gyro_cnts_[0]) * gyro_scale_ * DEG2RAD_;
+    gz[j] = static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f * DEG2RAD_;
+    j++;
+  }
+  return j;
+}
+int16_t Mpu9250::ProcessFifoData(uint8_t * const data, const size_t len,
+                                 float * const gx, float * const gy, float * const gz,
+                                 float * const ax, float * const ay, float * const az,
+                                 bool * const mag_drdy,
+                                 float * const hx, float * const hy, float * const hz) {
+  if ((!data) || (!gx) || (!gy) || (!gz) || (!ax) || (!ay) || (!az) ||
+      (!mag_drdy) || (!hx) || (!hy) || (!hz)) {
+    return -1;
+  }
+  size_t j = 0;
+  for (size_t i = 0; i < len; i = i + 20) {
+    /* Unpack the buffer */
+    accel_cnts_[0] = static_cast<int16_t>(data[i + 0])  << 8 | data[i + 1];
+    accel_cnts_[1] = static_cast<int16_t>(data[i + 2])  << 8 | data[i + 3];
+    accel_cnts_[2] = static_cast<int16_t>(data[i + 4])  << 8 | data[i + 5];
+    gyro_cnts_[0] =  static_cast<int16_t>(data[i + 6])  << 8 | data[i + 7];
+    gyro_cnts_[1] =  static_cast<int16_t>(data[i + 8]) << 8 | data[i + 9];
+    gyro_cnts_[2] =  static_cast<int16_t>(data[i + 10]) << 8 | data[i + 11];
+    new_mag_data_ = (data[i + 12] & AK8963_DATA_RDY_INT_);
+    mag_cnts_[0] =   static_cast<int16_t>(data[i+ 14]) << 8 | data[i + 13];
+    mag_cnts_[1] =   static_cast<int16_t>(data[i+ 16]) << 8 | data[i + 15];
+    mag_cnts_[2] =   static_cast<int16_t>(data[i+ 18]) << 8 | data[i + 17];
+    mag_sensor_overflow_ = (data[i + 19] & AK8963_HOFL_);
+    if (mag_sensor_overflow_) {
+      new_mag_data_ = false;
+    }
+    /* Convert to float values and rotate the accel / gyro axis */
+    ax[j] = static_cast<float>(accel_cnts_[1]) * accel_scale_ * G_MPS2_;
+    ay[j] = static_cast<float>(accel_cnts_[0]) * accel_scale_ * G_MPS2_;
+    az[j] = static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f * G_MPS2_;
+    gx[j] = static_cast<float>(gyro_cnts_[1]) * gyro_scale_ * DEG2RAD_;
+    gy[j] = static_cast<float>(gyro_cnts_[0]) * gyro_scale_ * DEG2RAD_;
+    gz[j] = static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f * DEG2RAD_;
+    mag_drdy[j] = new_mag_data_;
+    hx[j] =   static_cast<float>(mag_cnts_[0]) * mag_scale_[0];
+    hy[j] =   static_cast<float>(mag_cnts_[1]) * mag_scale_[1];
+    hz[j] =   static_cast<float>(mag_cnts_[2]) * mag_scale_[2];
+    j++;
+  }
+  return j;
+}
 bool Mpu9250::WriteRegister(const uint8_t reg, const uint8_t data) {
   return imu_.WriteRegister(reg, data, spi_clock_);
 }
 bool Mpu9250::ReadRegisters(const uint8_t reg, const uint8_t count,
                             uint8_t * const data) {
   return imu_.ReadRegisters(reg, count, spi_clock_, data);
+}
+bool Mpu9250::ReadFifo(const uint8_t reg, const uint8_t count,
+                       uint8_t * const data) {
+  return imu_.ReadFifo(reg, count, spi_clock_, data);
 }
 bool Mpu9250::WriteAk8963Register(const uint8_t reg, const uint8_t data) {
   uint8_t ret_val;

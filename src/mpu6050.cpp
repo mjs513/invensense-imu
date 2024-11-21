@@ -23,11 +23,10 @@
 * IN THE SOFTWARE.
 */
 
-#include "mpu6500.h"  // NOLINT
+#include "mpu6050.h"  // NOLINT
 #if defined(ARDUINO)
 #include <Arduino.h>
 #include "Wire.h"
-#include "SPI.h"
 #else
 #include <cstddef>
 #include <cstdint>
@@ -37,30 +36,15 @@
 
 namespace bfs {
 
-void Mpu6500::Config(TwoWire *i2c, const I2cAddr addr) {
+void Mpu6050::Config(TwoWire *i2c, const I2cAddr addr) {
   imu_.Config(i2c, static_cast<uint8_t>(addr));
-  iface_ = I2C;
 }
-void Mpu6500::Config(SPIClass *spi, const uint8_t cs) {
-  imu_.Config(spi, cs);
-  iface_ = SPI;
-}
-bool Mpu6500::Begin() {
+bool Mpu6050::Begin() {
   imu_.Begin();
-  /* 1 MHz for config */
-  spi_clock_ = SPI_CFG_CLOCK_;
-  if (iface_ == SPI) {
-    /* I2C IF DIS */
-    WriteRegister(USER_CTRL_, I2C_IF_DIS_);
-  }
   /* Reset the IMU */
   WriteRegister(PWR_MGMNT_1_, H_RESET_);
   /* Wait for IMU to come back up */
   delay(100);
-  if (iface_ == SPI) {
-    /* I2C IF DIS */
-    WriteRegister(USER_CTRL_, I2C_IF_DIS_);
-  }
   /* Select clock source to gyro */
   if (!WriteRegister(PWR_MGMNT_1_, CLKSEL_PLL_)) {
     return false;
@@ -69,7 +53,7 @@ bool Mpu6500::Begin() {
   if (!ReadRegisters(WHOAMI_, sizeof(who_am_i_), &who_am_i_)) {
     return false;
   }
-  if (who_am_i_ != WHOAMI_MPU6500_) {
+  if (who_am_i_ != WHOAMI_MPU6050_) {
     return false;
   }
   /* Set the accel range to 16G by default */
@@ -90,8 +74,7 @@ bool Mpu6500::Begin() {
   }
   return true;
 }
-bool Mpu6500::EnableDrdyInt() {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::EnableDrdyInt() {
   if (!WriteRegister(INT_PIN_CFG_, INT_PULSE_50US_)) {
     return false;
   }
@@ -100,15 +83,13 @@ bool Mpu6500::EnableDrdyInt() {
   }
   return true;
 }
-bool Mpu6500::DisableDrdyInt() {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::DisableDrdyInt() {
   if (!WriteRegister(INT_ENABLE_, INT_DISABLE_)) {
     return false;
   }
   return true;
 }
-bool Mpu6500::EnableFifo() {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::EnableFifo() {
   if (!WriteRegister(USER_CTRL_, USER_CTRL_FIFO_EN_)) {
     return false;
   }
@@ -117,8 +98,7 @@ bool Mpu6500::EnableFifo() {
   }
   return true;
 }
-bool Mpu6500::DisableFifo() {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::DisableFifo() {
   if (!WriteRegister(USER_CTRL_, USER_CTRL_FIFO_DISABLE_)) {
     return false;
   }
@@ -127,8 +107,7 @@ bool Mpu6500::DisableFifo() {
   }
   return true;
 }
-bool Mpu6500::ConfigAccelRange(const AccelRange range) {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::ConfigAccelRange(const AccelRange range) {
   /* Check input is valid and set requested range and scale */
   switch (range) {
     case ACCEL_RANGE_2G: {
@@ -164,8 +143,7 @@ bool Mpu6500::ConfigAccelRange(const AccelRange range) {
   accel_scale_ = requested_accel_scale_;
   return true;
 }
-bool Mpu6500::ConfigGyroRange(const GyroRange range) {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::ConfigGyroRange(const GyroRange range) {
   /* Check input is valid and set requested range and scale */
   switch (range) {
     case GYRO_RANGE_250DPS: {
@@ -201,8 +179,7 @@ bool Mpu6500::ConfigGyroRange(const GyroRange range) {
   gyro_scale_ = requested_gyro_scale_;
   return true;
 }
-bool Mpu6500::ConfigSrd(const uint8_t srd) {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::ConfigSrd(const uint8_t srd) {
   /* Set the IMU sample rate */
   if (!WriteRegister(SMPLRT_DIV_, srd)) {
     return false;
@@ -210,8 +187,7 @@ bool Mpu6500::ConfigSrd(const uint8_t srd) {
   srd_ = srd;
   return true;
 }
-bool Mpu6500::ConfigDlpfBandwidth(const DlpfBandwidth dlpf) {
-  spi_clock_ = SPI_CFG_CLOCK_;
+bool Mpu6050::ConfigDlpfBandwidth(const DlpfBandwidth dlpf) {
   /* Check input is valid and set requested dlpf */
   switch (dlpf) {
     case DLPF_BANDWIDTH_184HZ: {
@@ -253,16 +229,13 @@ bool Mpu6500::ConfigDlpfBandwidth(const DlpfBandwidth dlpf) {
   dlpf_bandwidth_ = requested_dlpf_;
   return true;
 }
-bool Mpu6500::Read() {
-  spi_clock_ = SPI_READ_CLOCK_;
+bool Mpu6050::Read() {
   /* Reset the new data flags */
   new_imu_data_ = false;
   /* Read the data registers */
   if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
     return false;
   }
-  /* Check for fifo overflow */
-  fifo_overflowed_ = (data_buf_[0] & FIFO_OFLOW_INT_);
   /* Check if data is ready */
   new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
   if (!new_imu_data_) {
@@ -279,15 +252,104 @@ bool Mpu6500::Read() {
   /* Convert to float values and rotate the accel / gyro axis */
   accel_[0] = static_cast<float>(accel_cnts_[1]) * accel_scale_ * G_MPS2_;
   accel_[1] = static_cast<float>(accel_cnts_[0]) * accel_scale_ * G_MPS2_;
-  accel_[2] = static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f * G_MPS2_;
-  temp_ = (static_cast<float>(temp_cnts_) - 21.0f) / TEMP_SCALE_ + 21.0f;
+  accel_[2] = static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f *
+              G_MPS2_;
+  temp_ = (static_cast<float>(temp_cnts_)) / TEMP_SCALE_ + 36.53f;
   gyro_[0] = static_cast<float>(gyro_cnts_[1]) * gyro_scale_ * DEG2RAD_;
   gyro_[1] = static_cast<float>(gyro_cnts_[0]) * gyro_scale_ * DEG2RAD_;
   gyro_[2] = static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f * DEG2RAD_;
   return true;
 }
-int16_t Mpu6500::ReadFifo(uint8_t * const data, const size_t len) {
-  spi_clock_ = SPI_READ_CLOCK_;
+
+bool Mpu6050::Read(float * values) {
+  /* Reset the new data flags */
+  new_imu_data_ = false;
+  /* Read the data registers */
+  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
+    return false;
+  }
+  /* Check if data is ready */
+  new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
+  if (!new_imu_data_) {
+    return false;
+  }
+  /* Unpack the buffer */
+  accel_cnts_[0] = static_cast<int16_t>(data_buf_[1])  << 8 | data_buf_[2];
+  accel_cnts_[1] = static_cast<int16_t>(data_buf_[3])  << 8 | data_buf_[4];
+  accel_cnts_[2] = static_cast<int16_t>(data_buf_[5])  << 8 | data_buf_[6];
+  temp_cnts_ =     static_cast<int16_t>(data_buf_[7])  << 8 | data_buf_[8];
+  gyro_cnts_[0] =  static_cast<int16_t>(data_buf_[9])  << 8 | data_buf_[10];
+  gyro_cnts_[1] =  static_cast<int16_t>(data_buf_[11]) << 8 | data_buf_[12];
+  gyro_cnts_[2] =  static_cast<int16_t>(data_buf_[13]) << 8 | data_buf_[14];
+  /* Convert to float values and rotate the accel / gyro axis */
+  accel_[0] = static_cast<float>(accel_cnts_[1]) * accel_scale_ * G_MPS2_;
+  accel_[1] = static_cast<float>(accel_cnts_[0]) * accel_scale_ * G_MPS2_;
+  accel_[2] = static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f *
+              G_MPS2_;
+  temp_ = (static_cast<float>(temp_cnts_) - 21.0f) / TEMP_SCALE_ + 21.0f;
+  gyro_[0] = static_cast<float>(gyro_cnts_[1]) * gyro_scale_ * DEG2RAD_;
+  gyro_[1] = static_cast<float>(gyro_cnts_[0]) * gyro_scale_ * DEG2RAD_;
+  gyro_[2] = static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f * DEG2RAD_;
+  
+  /* Convert to float values and rotate the accel / gyro axis */
+  values[0] = static_cast<float>(accel_cnts_[1]) * accel_scale_ ;
+  values[1] = static_cast<float>(accel_cnts_[0]) * accel_scale_ ;
+  values[2] = static_cast<float>(accel_cnts_[2]) * accel_scale_ * -1.0f;
+  values[9] = (static_cast<float>(temp_cnts_) - 21.0f) / TEMP_SCALE_ + 21.0f;
+  values[3] = static_cast<float>(gyro_cnts_[1]) * gyro_scale_ ;
+  values[4] = static_cast<float>(gyro_cnts_[0]) * gyro_scale_ ;
+  values[5] = static_cast<float>(gyro_cnts_[2]) * gyro_scale_ * -1.0f ;
+  values[7] = temp_;
+
+  return true;
+}
+
+
+bool Mpu6050::Read_raw(int16_t * values) {
+  /* Reset the new data flags */
+  new_imu_data_ = false;
+  /* Read the data registers */
+  if (!ReadRegisters(INT_STATUS_, sizeof(data_buf_), data_buf_)) {
+    return false;
+  }
+  /* Check if data is ready */
+  new_imu_data_ = (data_buf_[0] & RAW_DATA_RDY_INT_);
+  if (!new_imu_data_) {
+    return false;
+  }
+  /* Unpack the buffer */
+  //Accel
+  values[0] = static_cast<int16_t>(data_buf_[1])  << 8 | data_buf_[2];
+  values[1] = static_cast<int16_t>(data_buf_[3])  << 8 | data_buf_[4];
+  values[2] = static_cast<int16_t>(data_buf_[5])  << 8 | data_buf_[6];
+  //Temp
+  values[6] = static_cast<int16_t>(data_buf_[7])  << 8 | data_buf_[8];
+  //Gyro
+  values[3] =  static_cast<int16_t>(data_buf_[9])  << 8 | data_buf_[10];
+  values[4] =  static_cast<int16_t>(data_buf_[11]) << 8 | data_buf_[12];
+  values[5] =  static_cast<int16_t>(data_buf_[13]) << 8 | data_buf_[14];
+  //Serial.printf("%d, %d, %d, %d, %d, %d, %d, %d\n", data_buf_[0], values[0], values[1], values[2], values[3], values[4], values[5], values[6]);
+
+  return true;
+}
+
+void Mpu6050::getScales(float *accScale, float *gyroScale, float *magScale){
+  *accScale = accel_scale_;
+  *gyroScale = gyro_scale_;
+  magScale[0] = 0;
+  magScale[1] = 0;
+  magScale[2] = 0;
+/*  
+  Serial.print("Accelerometer Scale: "); Serial.println(accel_scale_, 5);
+  Serial.print("Gyro Scale: "); Serial.println(gyro_scale_, 5);
+  Serial.println("Magnetometer Scales:");
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[0],5);
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[1],5);
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[2],5);
+  */
+}
+
+int16_t Mpu6050::ReadFifo(uint8_t * const data, const size_t len) {
   if (!data) {
     return -1;
   }
@@ -316,7 +378,7 @@ int16_t Mpu6500::ReadFifo(uint8_t * const data, const size_t len) {
     return 0;
   }
 }
-int16_t Mpu6500::ProcessFifoData(uint8_t * const data, const size_t len,
+int16_t Mpu6050::ProcessFifoData(uint8_t * const data, const size_t len,
                                  float * const gx, float * const gy, float * const gz,
                                  float * const ax, float * const ay, float * const az) {
   if ((!data) || (!gx) || (!gy) || (!gz) || (!ax) || (!ay) || (!az)) {
@@ -342,16 +404,16 @@ int16_t Mpu6500::ProcessFifoData(uint8_t * const data, const size_t len,
   }
   return j;
 }
-bool Mpu6500::WriteRegister(const uint8_t reg, const uint8_t data) {
-  return imu_.WriteRegister(reg, data, spi_clock_);
+bool Mpu6050::WriteRegister(const uint8_t reg, const uint8_t data) {
+  return imu_.WriteRegister(reg, data, 0);
 }
-bool Mpu6500::ReadRegisters(const uint8_t reg, const uint8_t count,
+bool Mpu6050::ReadRegisters(const uint8_t reg, const uint8_t count,
                             uint8_t * const data) {
-  return imu_.ReadRegisters(reg, count, spi_clock_, data);
+  return imu_.ReadRegisters(reg, count, 0, data);
 }
-bool Mpu6500::ReadFifo(const uint8_t reg, const uint8_t count,
+bool Mpu6050::ReadFifo(const uint8_t reg, const uint8_t count,
                        uint8_t * const data) {
-  return imu_.ReadFifo(reg, count, spi_clock_, data);
+  return imu_.ReadFifo(reg, count, 0, data);
 }
 
 }  // namespace bfs
