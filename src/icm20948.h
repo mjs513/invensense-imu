@@ -133,6 +133,7 @@ class Icm20948 {
   bool Read();
   bool Read(float *calValues_);
   bool ReadRaw(int16_t *rawValues_);
+  void getScales(float *accScale, float *gyroScale, float *magScale);
   inline bool new_imu_data() const {return new_imu_data_;}
   inline float accel_x_mps2() const {return accel_[0];}
   inline float accel_y_mps2() const {return accel_[1];}
