@@ -598,7 +598,22 @@ bool Mpu9250::Read_raw(int16_t * values) {
   return true;
 }
 
-
+void Mpu9250::getScales(float *accScale, float *gyroScale, float *magScale){
+  *accScale = accel_scale_;
+  *gyroScale = gyro_scale_;
+  magScale[0] = mag_scale_[0];
+  magScale[1] = mag_scale_[1];
+  magScale[2] = mag_scale_[2];
+  
+/*  
+  Serial.print("Accelerometer Scale: "); Serial.println(accel_scale_, 5);
+  Serial.print("Gyro Scale: "); Serial.println(gyro_scale_, 5);
+  Serial.println("Magnetometer Scales:");
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[0],5);
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[1],5);
+  Serial.print("\tMagx: "); Serial.println(mag_scale_[2],5);
+  */
+}
 int16_t Mpu9250::ReadFifo(uint8_t * const data, const size_t len) {
   spi_clock_ = SPI_READ_CLOCK_;
   if (!data) {

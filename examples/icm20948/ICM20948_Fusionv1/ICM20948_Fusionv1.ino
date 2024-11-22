@@ -13,9 +13,6 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#include <LibPrintf.h>
-#include <avr/dtostrf.h>
-
 #include "icm20948.h"
 #include "ak09916.h"
 
@@ -23,15 +20,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "stdint.h"
-#include <USB/PluggableUSBSerial.h>
-arduino::USBSerial SerialUSB1(false);
-
 #include <Wire.h>
 #include "Streaming.h"
 #include <string>
 
 #include "constants.h" 
+#define printf Serial.printf
 
 /* Icm20948 object */
 bfs::Icm20948 imu(&Wire, bfs::Icm20948::I2C_ADDR_SEC);
@@ -55,7 +49,6 @@ FusionQuaternion q;
 FusionEuler euler;
 FusionAhrsFlags flags;
 
-// Define calibration
 // Define calibration
 const FusionMatrix gyroscopeMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 //gyroscop offsets and sensitity configured in gyroCalibration()
@@ -94,7 +87,10 @@ void setup() {
 
   cout.println("IMU Connected!");
 
-
+  /* Set the sample rate divider */
+  // rate = 1000 / (srd + 1)
+  // = 1000/20 = 50 hz
+  // = 100 hz
   if (!imu.ConfigSrd(10)) {
     Serial.println("Error configured SRD");
     while(1) {}
@@ -241,9 +237,9 @@ void getFusion() {
     FusionVector magnetometer = {  val[6], val[7], val[8] }; // replace this with actual magnetometer data in arbitrary units
 
     // Apply calibration
-    //gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
-    //accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
-    //magnetometer = FusionCalibrationMagnetic(magnetometer, softIronMatrix, hardIronOffset);
+    gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
+    accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
+    magnetometer = FusionCalibrationMagnetic(magnetometer, softIronMatrix, hardIronOffset);
 
     // Update gyroscope offset correction algorithm
     //gyroscope = FusionOffsetUpdate(&offset, gyroscope);
