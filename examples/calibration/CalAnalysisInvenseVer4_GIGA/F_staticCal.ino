@@ -49,10 +49,18 @@ void staticCal(){
     #elif defined(HMC5983A)
     float mag_val[3];
     mag.getMagScaled(mag_val);
-    cbhX.push_back(mag_val[0]-hNorth);
+    cbhX.push_back(-mag_val[0]-hNorth);
     cbhY.push_back(mag_val[1]-hEast);
-    cbhZ.push_back(mag_val[2]-hDown);
-    
+    cbhZ.push_back(-mag_val[2]-hDown);
+
+    #elif defined(LIS3MDLA)
+  /* Or....get a new sensor event, normalized to uTesla */
+    sensors_event_t event; 
+    mag.getEvent(&event);
+    cbhX.push_back(event.magnetic.x-hNorth);
+    cbhY.push_back(event.magnetic.y-hEast);
+    cbhZ.push_back(event.magnetic.z-hDown);
+
     #else
     cbhX.push_back(0);
     cbhY.push_back(0);
@@ -118,9 +126,17 @@ void noiseLevelsIMU(){
     #elif defined(HMC5983A)
     float mag_val[3];
     mag.getMagScaled(mag_val);
-    cbhX.push_back(mag_val[0]);
+    cbhX.push_back(-mag_val[0]);
     cbhY.push_back(mag_val[1]);
-    cbhZ.push_back(mag_val[2]);
+    cbhZ.push_back(-mag_val[2]);
+
+    #elif defined(LIS3MDLA)
+  /* Or....get a new sensor event, normalized to uTesla */
+    sensors_event_t event; 
+    mag.getEvent(&event);
+    cbhX.push_back(event.magnetic.x-hNorth);
+    cbhY.push_back(event.magnetic.y-hEast);
+    cbhZ.push_back(event.magnetic.z-hDown);
     
     #else
     cbhX.push_back(0);

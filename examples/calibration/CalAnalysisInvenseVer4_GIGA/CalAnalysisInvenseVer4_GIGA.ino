@@ -33,18 +33,22 @@ that user can verify it will perform as expected upon IMU startup. The accel and
 calibrations are written to EEPROM where they can be retrieved upon IMU startup.
 ////////////////////////////////////////////////////////////////////////////////////
 */
+//for giga
+#include <LibPrintf.h>
+#include <avr/dtostrf.h>
 
 //Select BFS IMU
 //#define MPU9250
 #define ICM20948
 //#define ICM20649
 //#define MPU6500
-//#define MPU6250
+//#define MPU6050
 
 //Separate Magnetometer test
+//Uncomment EXTMAG and one of the magnetometometers upported
+//#define EXTMAG
 //#define HMC5983A
-
-#include "EEPROM.h"
+//#define LIS3MDLA
 
 #if defined(MPU9250)
 #include "mpu9250.h"
@@ -63,24 +67,30 @@ bfs::Ak09916 mag;
 #elif defined(ICM20649)
 #include "icm20649.h"
 #define IMU_TYPE bfs::Icm20649
+#define IMU_ADDR I2C_ADDR_PRIM
 bfs::Icm20649 Imu;
 
 #elif defined(MPU6500)
 #include "mpu6500.h"
+#define IMU_ADDR I2C_ADDR_PRIM
 #define IMU_TYPE bfs::Mpu6500
 bfs::Mpu6500 Imu;
 
-#elif defined(MPU6250)
-#include "mpu6250.h"
-#define IMU_TYPE bfs::Mpu6250
-bfs::Mpu6250 Imu;
+#elif defined(MPU6050)
+#include "mpu6050.h"
+#define IMU_TYPE bfs::Mpu6050
+#define IMU_ADDR I2C_ADDR_PRIM
+bfs::Mpu6050 Imu;
+#endif
+
 #if defined(HMC5983A)
 #include "HMC5983.h"
 HMC5983 mag(&Wire);
+#elif defined(LIS3MDLA)
+#include <Adafruit_LIS3MDL.h>
+#include <Adafruit_Sensor.h>
+Adafruit_LIS3MDL mag;
 #endif
-#endif
-
-
 
 // IMU Declares
 #define IMU_BUS       Wire  //Wire // SPI
@@ -185,21 +195,37 @@ void setup() {
   Imu.ConfigAccelRange(IMU_TYPE::ACCEL_RANGE_8G);
   Imu.ConfigGyroRange(IMU_TYPE::GYRO_RANGE_500DPS);
 
-  #elif defined(MPU6250)
+  #elif defined(MPU6050)
+  Imu.ConfigAccelRange(IMU_TYPE::ACCEL_RANGE_8G);
+  Imu.ConfigGyroRange(IMU_TYPE::GYRO_RANGE_250DPS);
+  Imu.ConfigDlpfBandwidth(IMU_TYPE::DLPF_BANDWIDTH_20HZ);
+  #endif
+
+  #if defined(HMC5983)
   if(!mag.Begin()) {
     Serial.println("Mag failed to start!!");
     while(1) {}
   };
-  Imu.ConfigAccelRange(IMU_TYPE::ACCEL_RANGE_8G);
-  Imu.ConfigGyroRange(IMU_TYPE::GYRO_RANGE_250DPS);
-  Imu.ConfigDlpfBandwidth(IMU_TYPE::DLPF_BANDWIDTH_21HZ);
-
-  #if defined(HMC5983)
   mag.setRange(HMC5983_RANGE_8_1GA);
   mag.setMeasurementMode(HMC5983_CONTINOUS);
   mag.setSampleAverages(HMC5983_SAMPLEAVERAGE_8);
   mag.setDataRate(HMC5983_DATARATE_75HZ);
-  #endif
+
+  #elif defined(LIS3MDLA)
+  if (! mag.begin_I2C()) {          // hardware I2C mode, can pass in address & alt Wire
+    Serial.println("Failed to find LIS3MDL chip");
+    while (1) { delay(10); }
+  }
+  Serial.println("LIS3MDL Found!");
+  mag.setPerformanceMode(LIS3MDL_MEDIUMMODE);
+  mag.setOperationMode(LIS3MDL_CONTINUOUSMODE);
+  mag.setDataRate(LIS3MDL_DATARATE_155_HZ);
+  mag.setRange(LIS3MDL_RANGE_4_GAUSS);
+  mag.setIntThreshold(500);
+  mag.configInterrupt(false, false, true, // enable z axis
+                          true, // polarity
+                          false, // don't latch
+                          true); // enabled!
   #endif
   
   // setting SRD to 9 for a 100 Hz update rate
@@ -214,7 +240,6 @@ void setup() {
   #endif
 
   // Read and print current calibration values
-  printEEPROMBiases();
   printIMUBiases();
   
   // tell user the command options
@@ -226,9 +251,7 @@ void setup() {
   Serial.println("  Enter 'd' to display all calibration values");
   Serial.println("  Enter 'z' to reset all calibration values to zero");
   Serial.println("  Enter 'p' to print corrected IMU readings to serial");
-  Serial.println("  Enter 'e' to load static cal values to EEPROM");
   Serial.println("  Enter 'i' to load static cal values to IMU");
-  Serial.println("  Enter 'l' to load MPU Library cal values to EEPROM");
   Serial.println("  Enter 'r' to calculate IMU sensor noise sigmas");
   Serial.println(" ");
 } // end setup loop
@@ -250,11 +273,7 @@ void loop() {
       gyroCal();
     }
     else if (rx_byte == 'd'){
-      Serial.println("Printing EEPROM:"); printEEPROMBiases();
       Serial.println("Printing IMU:"); printIMUBiases();
-    }
-    else if (rx_byte == 'z'){
-      zeroCalValues();
     }
     else if (rx_byte == 's'){
       staticCal();
@@ -262,14 +281,8 @@ void loop() {
     else if (rx_byte == 'p'){
       serialPrintFlag = !serialPrintFlag;
     }
-    else if (rx_byte == 'e'){
-      loadSCBiasesEEPROM(); // load static biases into EEPROM
-    }
     else if (rx_byte == 'i'){
       loadBiasesIMU(); // load static biases into IMU
-    }
-    else if (rx_byte == 'l'){
-      loadLibBiasesEEPROM(); // load MPU Lib biases into EEPROM
     }
     else if (rx_byte == 'r'){
       noiseLevelsIMU(); // calculate noise sigma for all IMU sensors

@@ -58,17 +58,22 @@ FusionAhrsFlags flags;
 // Define calibration
 // Define calibration
 const FusionMatrix gyroscopeMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+
 //gyroscop offsets and sensitity configured in gyroCalibration()
 FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
 FusionVector gyroscopeOffset = {0.0f, 0.0f, 0.0f};
+
 //Accelerometer calibration configured in getCalIMU();
 const FusionMatrix accelerometerMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
 const FusionVector accelerometerOffset = {0.0f, 0.0f, 0.0f};
-//Magnetometer calibration configured = motioncal for ICM20948
-const FusionMatrix softIronMatrix = {0.9782,0.0085,0.0045,0.0085,1.0210,0.0103,0.0045,0.0103,1.0014};
-const FusionVector hardIronOffset = {-0.810,-20.826,29.804};
 
+//Magnetometer calibration configured = motioncal for ICM20948
+//NOTE: Output from MotionCal or Magneto 1.2
+//const FusionMatrix softIronMatrix = {0.9782,0.0085,0.0045,0.0085,1.0210,0.0103,0.0045,0.0103,1.0014};
+//const FusionVector hardIronOffset = {-0.810,-20.826,29.804};
+const FusionMatrix softIronMatrix = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+const FusionVector hardIronOffset = {0.0f, 0.0f, 0};
   
   //new data available
 volatile int newIMUData;
@@ -119,7 +124,7 @@ void setup() {
   // Set AHRS algorithm settings
   const FusionAhrsSettings settings = {
           .convention = FusionConventionNed,
-          .gain = 0.5f, //1.5f,
+          .gain = 1.5f, //1.5f,
           .gyroscopeRange = 2000.0f, // replace this with actual gyroscope range in degrees/s
           .accelerationRejection = 10.0f,
           .magneticRejection = 10.0f, //0.0f,
@@ -219,11 +224,18 @@ void getCalIMU() {
     val[3] = imu.gyro_x_radps() * rads2degs;
     val[4] = imu.gyro_y_radps() * rads2degs;
     val[5] = imu.gyro_z_radps() * rads2degs;
+
+    //accel calibration applied
+    val[0] = (val[0] - acc_off[0]) * acc_scale[0];
+    val[1] = (val[1] - acc_off[1]) * acc_scale[1];
+    val[2] = (val[2] - acc_off[2]) * acc_scale[2];
+
+
   }
   if (mag.Read()) {
-    val[6] = mag.mag_x_ut();
-    val[7] = mag.mag_y_ut();
-    val[8] = mag.mag_z_ut();
+    val[6] = (mag.mag_x_ut() - magn_off[0]) * magn_scale[0];
+    val[7] = (mag.mag_y_ut() - magn_off[1]) * magn_scale[1];
+    val[8] = (mag.mag_z_ut() - magn_off[2]) * magn_scale[2];
   }
 }
 
@@ -241,9 +253,9 @@ void getFusion() {
     FusionVector magnetometer = {  val[6], val[7], val[8] }; // replace this with actual magnetometer data in arbitrary units
 
     // Apply calibration
-    //gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
-    //accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
-    //magnetometer = FusionCalibrationMagnetic(magnetometer, softIronMatrix, hardIronOffset);
+    gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
+    accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
+    magnetometer = FusionCalibrationMagnetic(magnetometer, softIronMatrix, hardIronOffset);
 
     // Update gyroscope offset correction algorithm
     //gyroscope = FusionOffsetUpdate(&offset, gyroscope);

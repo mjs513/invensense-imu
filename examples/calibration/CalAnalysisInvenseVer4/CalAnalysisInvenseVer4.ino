@@ -36,16 +36,20 @@ calibrations are written to EEPROM where they can be retrieved upon IMU startup.
 
 //Select BFS IMU
 //#define MPU9250
-//#define ICM20948
+#define ICM20948
 //#define ICM20649
 //#define MPU6500
-#define MPU6050
+//#define MPU6050
 
 //Separate Magnetometer test
-#define EXTMAG
-#define HMC5983A
+//Uncomment EXTMAG and one of the magnetometometers upported
+//#define EXTMAG
+//#define HMC5983A
+//#define LIS3MDLA
 
+#if defined(TEENSYDUINO)
 #include "EEPROM.h"
+#endif
 
 #if defined(MPU9250)
 #include "mpu9250.h"
@@ -78,13 +82,16 @@ bfs::Mpu6500 Imu;
 #define IMU_TYPE bfs::Mpu6050
 #define IMU_ADDR I2C_ADDR_PRIM
 bfs::Mpu6050 Imu;
+#endif
+
 #if defined(HMC5983A)
 #include "HMC5983.h"
 HMC5983 mag(&Wire);
+#elif defined(LIS3MDLA)
+#include <Adafruit_LIS3MDL.h>
+#include <Adafruit_Sensor.h>
+Adafruit_LIS3MDL mag;
 #endif
-#endif
-
-
 
 // IMU Declares
 #define IMU_BUS       Wire  //Wire // SPI
@@ -190,20 +197,36 @@ void setup() {
   Imu.ConfigGyroRange(IMU_TYPE::GYRO_RANGE_500DPS);
 
   #elif defined(MPU6050)
+  Imu.ConfigAccelRange(IMU_TYPE::ACCEL_RANGE_8G);
+  Imu.ConfigGyroRange(IMU_TYPE::GYRO_RANGE_250DPS);
+  Imu.ConfigDlpfBandwidth(IMU_TYPE::DLPF_BANDWIDTH_20HZ);
+  #endif
+
+  #if defined(HMC5983)
   if(!mag.Begin()) {
     Serial.println("Mag failed to start!!");
     while(1) {}
   };
-  Imu.ConfigAccelRange(IMU_TYPE::ACCEL_RANGE_8G);
-  Imu.ConfigGyroRange(IMU_TYPE::GYRO_RANGE_250DPS);
-  Imu.ConfigDlpfBandwidth(IMU_TYPE::DLPF_BANDWIDTH_20HZ);
-
-  #if defined(HMC5983)
   mag.setRange(HMC5983_RANGE_8_1GA);
   mag.setMeasurementMode(HMC5983_CONTINOUS);
   mag.setSampleAverages(HMC5983_SAMPLEAVERAGE_8);
   mag.setDataRate(HMC5983_DATARATE_75HZ);
-  #endif
+
+  #elif defined(LIS3MDLA)
+  if (! mag.begin_I2C()) {          // hardware I2C mode, can pass in address & alt Wire
+    Serial.println("Failed to find LIS3MDL chip");
+    while (1) { delay(10); }
+  }
+  Serial.println("LIS3MDL Found!");
+  mag.setPerformanceMode(LIS3MDL_MEDIUMMODE);
+  mag.setOperationMode(LIS3MDL_CONTINUOUSMODE);
+  mag.setDataRate(LIS3MDL_DATARATE_155_HZ);
+  mag.setRange(LIS3MDL_RANGE_4_GAUSS);
+  mag.setIntThreshold(500);
+  mag.configInterrupt(false, false, true, // enable z axis
+                          true, // polarity
+                          false, // don't latch
+                          true); // enabled!
   #endif
   
   // setting SRD to 9 for a 100 Hz update rate
@@ -254,7 +277,9 @@ void loop() {
       gyroCal();
     }
     else if (rx_byte == 'd'){
+    #if defined(TEENSYDUINO)
       Serial.println("Printing EEPROM:"); printEEPROMBiases();
+    #endif
       Serial.println("Printing IMU:"); printIMUBiases();
     }
     else if (rx_byte == 'z'){
@@ -267,13 +292,17 @@ void loop() {
       serialPrintFlag = !serialPrintFlag;
     }
     else if (rx_byte == 'e'){
+      #if defined(TEENSYDUINO)
       loadSCBiasesEEPROM(); // load static biases into EEPROM
+      #endif
     }
     else if (rx_byte == 'i'){
       loadBiasesIMU(); // load static biases into IMU
     }
     else if (rx_byte == 'l'){
+      #if defined(TEENSYDUINO)
       loadLibBiasesEEPROM(); // load MPU Lib biases into EEPROM
+      #endif
     }
     else if (rx_byte == 'r'){
       noiseLevelsIMU(); // calculate noise sigma for all IMU sensors

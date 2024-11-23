@@ -185,6 +185,17 @@ int calibrateMag() {
   _hzmax = -mag_val[2];
   _hzmin = -mag_val[2];
 
+  #elif defined(LIS3MDLA)
+  /* Or....get a new sensor event, normalized to uTesla */
+  sensors_event_t event; 
+  mag.getEvent(&event);
+  _hxmax = event.magnetic.x;
+  _hxmin = event.magnetic.x;
+  _hymax = event.magnetic.y;
+  _hymin = event.magnetic.y;
+  _hzmax = event.magnetic.z;
+  _hzmin = event.magnetic.z;
+
   #elif defined(ICM20948)
   float mag_val[3];
   mag.Read();
@@ -224,12 +235,22 @@ int calibrateMag() {
     {
       {
         mag.getMagScaled(mag_val);
-        Serial.println(_counter);
+        //Serial.println(_counter);
         _hxfilt = (_hxfilt*((float)_coeff-1)+(-mag_val[0]/_hxs+_hxb))/((float)_coeff);
         _hyfilt = (_hyfilt*((float)_coeff-1)+(mag_val[1]/_hys+_hyb))/((float)_coeff);
         _hzfilt = (_hzfilt*((float)_coeff-1)+(-mag_val[2]/_hzs+_hzb))/((float)_coeff);
         delay(50);
 
+    #elif defined(LIS3MDLA)
+    {
+      {
+        sensors_event_t event; 
+        mag.getEvent(&event);
+                //Serial.println(_counter);
+        _hxfilt = (_hxfilt*((float)_coeff-1)+(event.magnetic.x/_hxs+_hxb))/((float)_coeff);
+        _hyfilt = (_hyfilt*((float)_coeff-1)+(event.magnetic.y/_hys+_hyb))/((float)_coeff);
+        _hzfilt = (_hzfilt*((float)_coeff-1)+(event.magnetic.z/_hzs+_hzb))/((float)_coeff);
+        delay(50);
     #else
     if(Imu.Read()){
       if(Imu.new_imu_data()){

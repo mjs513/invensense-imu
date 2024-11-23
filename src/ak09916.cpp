@@ -140,7 +140,7 @@ bool Ak09916::Read() {
     if (buf_[7] & ST2_HOFL_) {
       return false;
     }
-    mag_[0] =   +1.0f * (static_cast<float>(mag_cnts_[1]) * MAG_SCALE_);  //was -1
+    mag_[0] =   -1.0f * (static_cast<float>(mag_cnts_[1]) * MAG_SCALE_);
     mag_[1] =   static_cast<float>(mag_cnts_[0]) * MAG_SCALE_;
     mag_[2] =   static_cast<float>(mag_cnts_[2]) * MAG_SCALE_;
     new_mag_data_ = true;

@@ -61,7 +61,7 @@ int calibrateAccel() {
     }
   }
 
-  Serial.printf("%f, %f, %f\n",_axbD, _aybD, _azbD );
+  printf("%f, %f, %f\n",_axbD, _aybD, _azbD );
 
   if (_axbD > 9.0f) {
     _axmax = (float)_axbD;
@@ -96,9 +96,9 @@ int calibrateAccel() {
     _azs = G/((abs(_azmin) + abs(_azmax)) / 2.0f);
   }
 
-  Serial.printf("Max: %f, %f, %f\n",_axmax,_aymax,_azmax );
-  Serial.printf("Max: %f, %f, %f\n",_axmin,_aymin,_azmin );
-  Serial.printf("%f, %f, %f\n",_axb,_ayb,_azb );
+  printf("Max: %f, %f, %f\n",_axmax,_aymax,_azmax );
+  printf("Max: %f, %f, %f\n",_axmin,_aymin,_azmin );
+  printf("%f, %f, %f\n",_axb,_ayb,_azb );
   // set the range, bandwidth, and srd back to what they were
 /*  if (setAccelRange(_accelRange) < 0) {
     return -4;
@@ -135,6 +135,8 @@ int calibrateGyro() {
   //for (size_t i=0; i < _numSamples; i++) {
   while(icount < _numSamples) {
     if(Imu.Read()){
+    icount += 1;
+
       if(Imu.new_imu_data()){
         icount += 1;
         _gxbD += (Imu.gyro_x_radps() + _gxb)/((double)_numSamples);
@@ -164,7 +166,7 @@ int calibrateGyro() {
 
 /* finds bias and scale factor calibration for the magnetometer,
 the sensor should be rotated in a figure 8 motion until complete */
-#if defined(MPU9250) || defined(ICM20948) 
+#if defined(MPU9250) || defined(ICM20948) || defined(EXTMAG)
 
 int calibrateMag() {
   // set the srd
@@ -176,12 +178,23 @@ int calibrateMag() {
   #if defined(HMC5983A)
   float mag_val[3];
   mag.getMagScaled(mag_val);
-  _hxmax = mag_val[0];
-  _hxmin = mag_val[0];
+  _hxmax = -mag_val[0];
+  _hxmin = -mag_val[0];
   _hymax = mag_val[1];
   _hymin = mag_val[1];
-  _hzmax = mag_val[2];
-  _hzmin = mag_val[2];
+  _hzmax = -mag_val[2];
+  _hzmin = -mag_val[2];
+
+  #elif defined(LIS3MDLA)
+  /* Or....get a new sensor event, normalized to uTesla */
+  sensors_event_t event; 
+  mag.getEvent(&event);
+  _hxmax = event.magnetic.x;
+  _hxmin = event.magnetic.x;
+  _hymax = event.magnetic.y;
+  _hymin = event.magnetic.y;
+  _hzmax = event.magnetic.z;
+  _hzmin = event.magnetic.z;
 
   #elif defined(ICM20948)
   float mag_val[3];
@@ -223,10 +236,21 @@ int calibrateMag() {
       {
         mag.getMagScaled(mag_val);
         //Serial.println(_counter);
-        _hxfilt = (_hxfilt*((float)_coeff-1)+(mag_val[0]/_hxs+_hxb))/((float)_coeff);
+        _hxfilt = (_hxfilt*((float)_coeff-1)+(-mag_val[0]/_hxs+_hxb))/((float)_coeff);
         _hyfilt = (_hyfilt*((float)_coeff-1)+(mag_val[1]/_hys+_hyb))/((float)_coeff);
-        _hzfilt = (_hzfilt*((float)_coeff-1)+(mag_val[2]/_hzs+_hzb))/((float)_coeff);
+        _hzfilt = (_hzfilt*((float)_coeff-1)+(-mag_val[2]/_hzs+_hzb))/((float)_coeff);
+        delay(50);
 
+    #elif defined(LIS3MDLA)
+    {
+      {
+        sensors_event_t event; 
+        mag.getEvent(&event);
+                //Serial.println(_counter);
+        _hxfilt = (_hxfilt*((float)_coeff-1)+(event.magnetic.x/_hxs+_hxb))/((float)_coeff);
+        _hyfilt = (_hyfilt*((float)_coeff-1)+(event.magnetic.y/_hys+_hyb))/((float)_coeff);
+        _hzfilt = (_hzfilt*((float)_coeff-1)+(event.magnetic.z/_hzs+_hzb))/((float)_coeff);
+        delay(50);
     #else
     if(Imu.Read()){
       if(Imu.new_imu_data()){
