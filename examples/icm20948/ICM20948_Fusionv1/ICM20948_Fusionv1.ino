@@ -302,7 +302,7 @@ void gyroCalibration() {
 
   printf("%f, %f, %f\n", gyrox_off, gyroy_off,gyroz_off );
   gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
-  gyroscopeOffset = {gyrox_off, gyrox_off, gyrox_off};
+  gyroscopeOffset = {gyrox_off, gyroy_off, gyroz_off};
 }
 
 void menu()

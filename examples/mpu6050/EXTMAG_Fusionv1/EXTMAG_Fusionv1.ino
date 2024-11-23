@@ -13,29 +13,27 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#include <LibPrintf.h>
-#include <avr/dtostrf.h>
+#include "mpu6050.h"
+#define HMC5983A
 
-#include "icm20948.h"
-#include "ak09916.h"
+/* Mpu9250 object */
+bfs::Mpu6050 imu(&Wire, bfs::Mpu6050::I2C_ADDR_PRIM);
+#if defined(HMC5983A)
+#include "HMC5983.h"
+HMC5983 mag(&Wire);
+#endif
 
 #include "Fusion.h"
 #include <stdbool.h>
 #include <stdio.h>
-
-#include "stdint.h"
-#include <USB/PluggableUSBSerial.h>
-arduino::USBSerial SerialUSB1(false);
 
 #include <Wire.h>
 #include "Streaming.h"
 #include <string>
 
 #include "constants.h" 
+#define printf Serial.printf
 
-/* Icm20948 object */
-bfs::Icm20948 imu(&Wire, bfs::Icm20948::I2C_ADDR_SEC);
-bfs::Ak09916 mag(&Wire);
 
 void gyroCalibration();
 
@@ -56,18 +54,19 @@ FusionEuler euler;
 FusionAhrsFlags flags;
 
 // Define calibration
-// Define calibration
 const FusionMatrix gyroscopeMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 //gyroscop offsets and sensitity configured in gyroCalibration()
 FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
 FusionVector gyroscopeOffset = {0.0f, 0.0f, 0.0f};
+
 //Accelerometer calibration configured in getCalIMU();
 const FusionMatrix accelerometerMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
 const FusionVector accelerometerOffset = {0.0f, 0.0f, 0.0f};
-//Magnetometer calibration configured = motioncal for ICM20948
-const FusionMatrix softIronMatrix = {0.9782,0.0085,0.0045,0.0085,1.0210,0.0103,0.0045,0.0103,1.0014};
-const FusionVector hardIronOffset = {-0.810,-20.826,29.804};
+
+//Magnetometer calibration configured = motioncal for 
+const FusionMatrix softIronMatrix = {0.9825,-0.0144,0.0187,-0.0144,1.0732,0.0098,0.0187,0.0098,0.9490};
+const FusionVector hardIronOffset = {1.763,-17.680,-0.378};
 
   
   //new data available
@@ -87,30 +86,37 @@ void setup() {
   Wire.setClock(400000);
 
   /* Initialize and configure IMU */
-  if (!imu.Begin(bfs::Icm20948::MAG_PASSTHROUGH)) {
+  if (!imu.Begin()) {
     Serial.println("Error initializing communication with IMU");
     while (1) {}
   }
 
   cout.println("IMU Connected!");
 
-
-  if (!imu.ConfigSrd(10)) {
+  /* Set the sample rate divider */
+  // rate = 1000 / (srd + 1)
+  // = 1000/20 = 50 hz
+  // = 100 hz
+  if (!imu.ConfigSrd(9)) {
     Serial.println("Error configured SRD");
     while(1) {}
   }
   /* MAG */
+#if defined(HMC5983A)
   if (!mag.Begin()) {
     Serial.println("Error initializing communication with MAG");
     while (1) {}
   }
+  mag.setRange(HMC5983_RANGE_8_1GA);
+  mag.setMeasurementMode(HMC5983_CONTINOUS);
+  mag.setSampleAverages(HMC5983_SAMPLEAVERAGE_8);
+  mag.setDataRate(HMC5983_DATARATE_75HZ);
+#endif
   Serial.println("Setup Complete");
 
   SAMPLE_RATE = 0.01f;	//100hz
 
-  //Get MPU sensitivity values
   imu.getScales(&accelScale, &gyroScale, magScale);
-  mag.getMagScale(magScale);
   gyroCalibration();
 
   FusionOffsetInitialise(&offset, SAMPLE_RATE);
@@ -130,6 +136,7 @@ void setup() {
 
 
   cout.println("Ready for commands....");
+  menu();
 }
 
 void loop() {
@@ -219,12 +226,19 @@ void getCalIMU() {
     val[3] = imu.gyro_x_radps() * rads2degs;
     val[4] = imu.gyro_y_radps() * rads2degs;
     val[5] = imu.gyro_z_radps() * rads2degs;
+
+    //appling accel calibration
+    val[0] = (val[0] - acc_off[0]) * acc_scale[0] ;
+    val[1] = (val[1] - acc_off[1]) * acc_scale[1] ;
+    val[2] = (val[2] - acc_off[2]) * acc_scale[2] ;
+  #if defined(HMC5983A)
+    mag.getMagScaled(mag_val);
+    val[6] = -mag_val[0];
+    val[7] = mag_val[1];
+    val[8] = -mag_val[2];
+  #endif
   }
-  if (mag.Read()) {
-    val[6] = mag.mag_x_ut();
-    val[7] = mag.mag_y_ut();
-    val[8] = mag.mag_z_ut();
-  }
+ 
 }
 
 void getFusion() {
@@ -241,9 +255,9 @@ void getFusion() {
     FusionVector magnetometer = {  val[6], val[7], val[8] }; // replace this with actual magnetometer data in arbitrary units
 
     // Apply calibration
-    //gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
-    //accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
-    //magnetometer = FusionCalibrationMagnetic(magnetometer, softIronMatrix, hardIronOffset);
+    gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
+    accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
+    magnetometer = FusionCalibrationMagnetic(magnetometer, softIronMatrix, hardIronOffset);
 
     // Update gyroscope offset correction algorithm
     //gyroscope = FusionOffsetUpdate(&offset, gyroscope);
