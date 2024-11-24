@@ -23,7 +23,7 @@
 * IN THE SOFTWARE.
 */
 
-#include "Icm20649.h"  // NOLINT
+#include "icm20649.h"  // NOLINT
 #if defined(ARDUINO)
 #include <Arduino.h>
 #include "Wire.h"
