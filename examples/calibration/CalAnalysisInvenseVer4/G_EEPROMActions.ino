@@ -3,7 +3,6 @@
 // EEPROM Routines
 //
 ////////////////////////////////////////////////////////////////////
-#if defined(TEENSYDUINO)
 void printEEPROMBiases(){
 
   float axbE, aybE, azbE, axsE, aysE, azsE;
@@ -109,4 +108,3 @@ void loadLibBiasesEEPROM() {
   Serial.println("MPU9250 Lib Calibration Values Saved to EEPROM");
   Serial.println(" ");
 }
-#endif

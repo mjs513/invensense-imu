@@ -11,7 +11,7 @@ float _axs = 1.0f;
 float _ays = 1.0f;
 float _azs = 1.0f;
 // magnetometer bias and scale factor estimation
-uint16_t _maxCounts = 750;
+uint16_t _maxCounts = 1000;
 float _deltaThresh = 0.3f;
 uint8_t _coeff = 8;
 uint16_t _counter;
@@ -242,6 +242,9 @@ int calibrateMag() {
         delay(50);
 
     #elif defined(LIS3MDLA)
+    // Using the Adafruit LIS3mdl and ICM20649 the axis are aligned on the bread board
+    // so have to use the same axis rotation for NED coordinates as the ICM20649 in the
+    // library
     {
       {
         sensors_event_t event; 

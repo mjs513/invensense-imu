@@ -36,20 +36,18 @@ calibrations are written to EEPROM where they can be retrieved upon IMU startup.
 
 //Select BFS IMU
 //#define MPU9250
-#define ICM20948
-//#define ICM20649
+//#define ICM20948
+#define ICM20649
 //#define MPU6500
 //#define MPU6050
 
 //Separate Magnetometer test
 //Uncomment EXTMAG and one of the magnetometometers upported
-//#define EXTMAG
+#define EXTMAG
 //#define HMC5983A
-//#define LIS3MDLA
+#define LIS3MDLA
 
-#if defined(TEENSYDUINO)
 #include "EEPROM.h"
-#endif
 
 #if defined(MPU9250)
 #include "mpu9250.h"
@@ -221,9 +219,9 @@ void setup() {
   mag.setPerformanceMode(LIS3MDL_MEDIUMMODE);
   mag.setOperationMode(LIS3MDL_CONTINUOUSMODE);
   mag.setDataRate(LIS3MDL_DATARATE_155_HZ);
-  mag.setRange(LIS3MDL_RANGE_4_GAUSS);
+  mag.setRange(LIS3MDL_RANGE_8_GAUSS);
   mag.setIntThreshold(500);
-  mag.configInterrupt(false, false, true, // enable z axis
+  mag.configInterrupt(true, true, true, // enable z axis
                           true, // polarity
                           false, // don't latch
                           true); // enabled!
@@ -277,9 +275,7 @@ void loop() {
       gyroCal();
     }
     else if (rx_byte == 'd'){
-    #if defined(TEENSYDUINO)
       Serial.println("Printing EEPROM:"); printEEPROMBiases();
-    #endif
       Serial.println("Printing IMU:"); printIMUBiases();
     }
     else if (rx_byte == 'z'){
@@ -292,17 +288,13 @@ void loop() {
       serialPrintFlag = !serialPrintFlag;
     }
     else if (rx_byte == 'e'){
-      #if defined(TEENSYDUINO)
       loadSCBiasesEEPROM(); // load static biases into EEPROM
-      #endif
     }
     else if (rx_byte == 'i'){
       loadBiasesIMU(); // load static biases into IMU
     }
     else if (rx_byte == 'l'){
-      #if defined(TEENSYDUINO)
       loadLibBiasesEEPROM(); // load MPU Lib biases into EEPROM
-      #endif
     }
     else if (rx_byte == 'r'){
       noiseLevelsIMU(); // calculate noise sigma for all IMU sensors
