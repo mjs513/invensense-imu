@@ -36,12 +36,9 @@ Tested on [Teensy 4.0](https://www.pjrc.com/store/teensy40.html), [Teensy 4.1](h
 
 Three additional Methods have been added to each sensor:
 
-**void getScales(float *accScale, float *gyroScale, float *magScale)**
-
-**bool Read(float *calValues_)**
-
-**bool Read_raw(int16_t *rawValues_)**
-
+* void getScales(float *accScale, float *gyroScale, float *magScale)
+* bool Read(float *calValues_)
+* bool Read_raw(int16_t *rawValues_)
 
 ### ICM-20948
 
