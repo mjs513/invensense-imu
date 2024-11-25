@@ -22,11 +22,16 @@
    * [Madgwick Fusion](https://github.com/xioTechnologies/Fusion)
    * PJRC [MotionCal](https://www.pjrc.com/store/prop_shield.html)
    
-   Please note I have not updated to allow for writing calibration values to the Teensy EEPROM.
+Please note I have not updated to allow for writing calibration values to the Teensy EEPROM.
    
 for a GUI I have been using X-IO Technologies [X-IMU3 GUI](https://x-io.co.uk/x-imu3/) or from there repo: https://github.com/xioTechnologies/x-IMU3-Software
 
-Tested on Teensy 4.0, Teensy 4.1 and Teensy Micromod.  Also tested on the Arduino GIGA R1 (GIGA has no eeprom support).
+Tested on [Teensy 4.0](https://www.pjrc.com/store/teensy40.html), [Teensy 4.1](https://www.pjrc.com/store/teensy41.html) and [Teensy Micromod](https://www.sparkfun.com/products/16402).  Also tested on the [Arduino GIGA R1](https://store.arduino.cc/products/giga-r1-wifi) (GIGA has no eeprom support).
+
+Other Notes:
+An example of using 6-point Calibration and PJRC MotionCal for the BMI270/BMM150 can be found here: ]Using BMM270 Accel/Gyro and BMI150 Magnetomer Sensors with Teensy 4.x](https://forum.pjrc.com/index.php?threads/using-bmm270-accel-gyro-and-bmi150-magnetomer-sensors-with-teensy-4-x.76123/)
+
+Using the Giga: https://forum.arduino.cc/t/experimenting-wonder-if-giga-can-support-multiple-usb-serial-objects/1323753/6?u=merlin513
 
 
 ### ICM-20948
