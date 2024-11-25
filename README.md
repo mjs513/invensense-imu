@@ -2,6 +2,186 @@
 
 ![Bolder Flight Systems Logo](img/logo-words_75.png) &nbsp; &nbsp; ![Arduino Logo](img/arduino_logo_75.png)
 
+
+## UPDATED 11/24/2024 by MJS13
+
+@flybrianfly of bolderflight updated this library to include the
+   * [Invensense ICM-20948](https://invensense.tdk.com/products/motion-tracking/9-axis/icm-20948/)
+   * [Invensense ICM-20649](https://invensense.tdk.com/products/motion-tracking/6-axis/icm-20649/)
+   * [Invensense MPU-6050](https://invensense.tdk.com/products/motion-tracking/6-axis/mpu-6050/)
+
+### ICM-20948
+
+The ICM-20948 is a 9-axis IMU.  The library supports both SPI and I2C communications:
+
+| Gyroscope Full Scale Range | Accelerometer Full Scale Range | Magnetometer Full Scale Range (MPU-9250 Only) |
+| --- | --- | ---  |
+| +/- 250 deg/s  | +/- 2g  | +/- 4900 uT |
+| +/- 500 deg/s  | +/- 4g  | |
+| +/- 1000 deg/s | +/- 8g  | |
+| +/- 2000 deg/s | +/- 16g | |
+
+The IMU uses a AK09916 for a magnetometer.  A separate library is used in Passthrough mode inorder to maintain high sampling rates.
+
+The same command set that is used for the MPU-9250 is available for the the ICM-209648.  With the following exceptions:
+
+#### Bandwidth
+
+Unlike the MPU-9250 the bandwidth for the accelerometer and gyroscope is specified separately.
+
+
+**bool ConfigAccelDlpfBandwidth(const AccelDlpfBandwidth dlpf)** Sets the cutoff frequency of the digital low pass filter for the accelerometer. Available bandwidths are:
+
+| DLPF Bandwidth | Enum Value |
+| --- | --- |
+| 473 Hz | ACCEL_DLPF_BANDWIDTH_473HZ |
+| 246 Hz | ACCEL_DLPF_BANDWIDTH_246HZ |
+| 111 Hz | ACCEL_DLPF_BANDWIDTH_111HZ |
+| 50 Hz | ACCEL_DLPF_BANDWIDTH_50HZ |
+| 23 Hz | ACCEL_DLPF_BANDWIDTH_23HZ |
+| 11 Hz | ACCEL_DLPF_BANDWIDTH_11HZ |
+| 5 Hz | ACCEL_DLPF_BANDWIDTH_5HZ |
+
+True is returned on succesfully setting the digital low pass filters, otherwise, false is returned. The default bandwidth is 473 Hz.
+
+**bool ConfigGyroDlpfBandwidth(const GyroDlpfBandwidth dlpf)** Sets the cutoff frequency of the digital low pass filter for the gyroscope. Available bandwidths are:
+
+| DLPF Bandwidth | Enum Value |
+| --- | --- |
+| 196 Hz | GYRO_DLPF_BANDWIDTH_196HZ |
+| 196 Hz | GYRO_DLPF_BANDWIDTH_196HZ |
+| 151 Hz | GYRO_DLPF_BANDWIDTH_151HZ |
+| 119 Hz | GYRO_DLPF_BANDWIDTH_119HZ |
+| 51 Hz | GYRO_DLPF_BANDWIDTH_51HZ |
+| 23 Hz | GYRO_DLPF_BANDWIDTH_23HZ |
+| 11 Hz | ACCEL_DLPF_BANDWIDTH_11HZ |
+| 5 Hz | GYRO_DLPF_BANDWIDTH_5HZ |
+
+True is returned on succesfully setting the digital low pass filters, otherwise, false is returned. The default bandwidth is 361 Hz.
+
+**bool ConfigTempDlpfBandwidth(const TempDlpfBandwidth dlpf)** Sets the cutoff frequency of the digital low pass filter for the temperature sensor. Available bandwidths are:
+
+| DLPF Bandwidth | Enum Value |
+| --- | --- |
+| 217 Hz | TEMP_DLPF_BANDWIDTH_217HZ |
+| 123 Hz | TEMP_DLPF_BANDWIDTH_123HZ |
+| 65 Hz | TEMP_DLPF_BANDWIDTH_65HZ |
+| 34 Hz | TEMP_DLPF_BANDWIDTH_34HZ |
+| 17 Hz | TEMP_DLPF_BANDWIDTH_17HZ |
+
+True is returned on succesfully setting the digital low pass filters, otherwise, false is returned. The default bandwidth is 217 Hz.
+
+#### Sample Rate (SRD)
+
+The ICM-20948 has the ability to calculate the sample rates independently for the accelerometer and gyroscope.  However the current library uses a only the gyroscope sample rate to control both the accelerometer and gyroscope.
+
+For the gyroscope the sample is defined:
+
+```math
+rate = 1125 / (srd + 1)
+```
+
+while for the accelerometer:
+```math
+rate = 1000 / (srd + 1)
+```
+
+The command for the sample rate is:
+
+**bool ConfigSrd(const uint8_t srd)** Sets the sensor sample rate divider. The ICM-20948 samples the accelerometer and gyro at a rate, in Hz, defined by:
+
+A *srd* setting of 0 means the ICM-20948 samples the accelerometer at a rate if 1125 Hz and gyro at 1000 Hz. A *srd* setting of 4 would set the sampling at 200 Hz for the gyro and 225 Hz. The IMU data ready interrupt is tied to the rate defined by the sample rate divider. For a 100 Hz sample rate a sample rate of 10 is recommended.  This gives 100 Hz for the accelerometer and 112 Hz for the gyroscope.
+
+
+```C++
+/* Set sample rate divider for 50 Hz */
+bool status = mpu9250.sample_rate_divider(19);
+if (!status) {
+  // ERROR
+}
+```
+
+The magnetometer is sample rate can be set using the following command when include the AK09916 library.
+ 
+**ConfigMeasRate(const MeasRate rate)** Sets the sample rate for the magnetometer.
+
+| Sample Rate | Enum Value |
+| --- | --- |
+| One Shot | MEAS_RATE_SINGLE |
+| 10 Hz | MEAS_RATE_10HZ |
+| 50 Hz | MEAS_RATE_50HZ |
+| 100 Hz | MEAS_RATE_100HZ |
+
+
+True is returned on succesfully setting the sample rate , otherwise, false is returned. The default sample rate divider value is 0, resulting in a 100 Hz sample rate.
+
+### ICM-20649
+
+The ICM-20649 is a extended range accelerometer and gyroscope in a single device.  It does provide an on-chip magnetometer so only a 6-axis device.
+
+The following selectable full scale sensor ranges are available:
+
+| Gyroscope Full Scale Range | Accelerometer Full Scale Range | 
+| --- | --- | ---  |
+| +/- 250 deg/s  | +/- 2g  | 
+| +/- 500 deg/s  | +/- 4g  |
+| +/- 1000 deg/s | +/- 8g  |
+| +/- 2000 deg/s | +/- 16g |
+| +/- 4000 deg/s | +/- 30g |
+
+#### Bandwidth
+
+Supports the same functions as ICM-20948 (see above for commands and enumerators).
+
+#### Sample Rate (SRD)
+
+See ICM-20948 for definition, command and setting description
+
+#### Full Scale Ranges for Accel and GyroDlpfBandwidth
+
+
+**bool ConfigAccelRange(const AccelRange range)** Sets the accelerometer full scale range. Options are:
+
+| Range | Enum Value |
+| --- | --- |
+| +/- 2g | ACCEL_RANGE_2G |
+| +/- 4g | ACCEL_RANGE_4G |
+| +/- 8g | ACCEL_RANGE_8G |
+| +/- 16g | ACCEL_RANGE_16G |
+| +/- 30g | ACCEL_RANGE_30G |
+
+True is returned on succesfully setting the accelerometer range, otherwise, false is returned. The default range is +/-30g.
+
+```C++
+bool status = icm20649.ConfigAccelRange(bfs::Icm20649::ACCEL_RANGE_4G);
+if (!status) {
+  // ERROR
+}
+```
+
+**bool ConfigGyroRange(const GyroRange range)** Sets the gyro full scale range. Options are:
+
+| Range | Enum Value |
+| --- | --- |
+| +/- 250 deg/s | GYRO_RANGE_250DPS |
+| +/- 500 deg/s | GYRO_RANGE_500DPS |
+| +/- 1000 deg/s | GYRO_RANGE_1000DPS |
+| +/- 2000 deg/s | GYRO_RANGE_2000DPS |
+| +/- 4000 deg/s | GYRO_RANGE_4000DPS |
+
+True is returned on succesfully setting the gyro range, otherwise, false is returned. The default range is +/-4000 deg/s.
+
+```C++
+bool status = icm20649.ConfigGyroRange(bfs::Icm20649::GYRO_RANGE_1000DPS);
+if (!status) {
+  // ERROR
+}
+```
+
+### MPU-6050
+
+
+
 # InvensenseImu
 This library communicates with [InvensenseMPU-6500](https://invensense.tdk.com/products/motion-tracking/6-axis/mpu-6500/) and [InvenSense MPU-9250 and MPU-9255](https://invensense.tdk.com/products/motion-tracking/9-axis/mpu-9250/) Inertial Measurement Units (IMUs). This library is compatible with Arduino and CMake build systems.
    * [License](LICENSE.md)
