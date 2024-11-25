@@ -3,12 +3,31 @@
 ![Bolder Flight Systems Logo](img/logo-words_75.png) &nbsp; &nbsp; ![Arduino Logo](img/arduino_logo_75.png)
 
 
-## UPDATED 11/24/2024 by MJS13
+## UPDATED 11/24/2024 by MJS513
 
 @flybrianfly of bolderflight updated this library to include the
    * [Invensense ICM-20948](https://invensense.tdk.com/products/motion-tracking/9-axis/icm-20948/)
    * [Invensense ICM-20649](https://invensense.tdk.com/products/motion-tracking/6-axis/icm-20649/)
    * [Invensense MPU-6050](https://invensense.tdk.com/products/motion-tracking/6-axis/mpu-6050/)
+
+@mjs513 added the following:
+   * Additional examples for using Madgwick's new Fusion for the MPU-9250, ICM-20948 and MPU-6050 w/HMC5983 Magnetometer and ICM-20649 w/LIS3MDL
+   * Filter implementation for the MPU9250 (Madgwick, Mahoney, Complimentary, DCM, and kalman.
+   * Calibration examples for 6-point method and using PJRC MotionCal software
+   
+   List of dependencies:
+   * [BolderFlight Units Library](https://github.com/bolderflight/units)
+   * [BolderFlight Eigen Library](https://github.com/bolderflight/eigen)
+   * [tonton81 Circular Buffer Library](https://github.com/tonton81/Circular_Buffer)
+   * [Madgwick Fusion](https://github.com/xioTechnologies/Fusion)
+   * PJRC [MotionCal](https://www.pjrc.com/store/prop_shield.html)
+   
+   Please note I have not updated to allow for writing calibration values to the Teensy EEPROM.
+   
+for a GUI I have been using X-IO Technologies [X-IMU3 GUI](https://x-io.co.uk/x-imu3/) or from there repo: https://github.com/xioTechnologies/x-IMU3-Software
+
+Tested on Teensy 4.0, Teensy 4.1 and Teensy Micromod.  Also tested on the Arduino GIGA R1 (GIGA has no eeprom support).
+
 
 ### ICM-20948
 
@@ -179,6 +198,13 @@ if (!status) {
 ```
 
 ### MPU-6050
+
+Current implementation for the MPU-6050 only supports I2C.
+
+
+
+
+
 
 
 
