@@ -3,7 +3,7 @@
 ![Bolder Flight Systems Logo](img/logo-words_75.png) &nbsp; &nbsp; ![Arduino Logo](img/arduino_logo_75.png)
 
 
-## UPDATED 11/24/2024 by MJS513
+### UPDATES 11/24/2024 by MJS513
 
 @flybrianfly of bolderflight updated this library to include the
    * [Invensense ICM-20948](https://invensense.tdk.com/products/motion-tracking/9-axis/icm-20948/)
@@ -28,10 +28,19 @@ for a GUI I have been using X-IO Technologies [X-IMU3 GUI](https://x-io.co.uk/x-
 
 Tested on [Teensy 4.0](https://www.pjrc.com/store/teensy40.html), [Teensy 4.1](https://www.pjrc.com/store/teensy41.html) and [Teensy Micromod](https://www.sparkfun.com/products/16402).  Also tested on the [Arduino GIGA R1](https://store.arduino.cc/products/giga-r1-wifi) (GIGA has no eeprom support).
 
-Other Notes:
-An example of using 6-point Calibration and PJRC MotionCal for the BMI270/BMM150 can be found here: ]Using BMM270 Accel/Gyro and BMI150 Magnetomer Sensors with Teensy 4.x](https://forum.pjrc.com/index.php?threads/using-bmm270-accel-gyro-and-bmi150-magnetomer-sensors-with-teensy-4-x.76123/)
+#### Other Notes:
 
-Using the Giga: https://forum.arduino.cc/t/experimenting-wonder-if-giga-can-support-multiple-usb-serial-objects/1323753/6?u=merlin513
+* An example of using 6-point Calibration and PJRC MotionCal for the BMI270/BMM150 can be found here: ]Using BMI270 Accel/Gyro and BMM150 Magnetomer Sensors with Teensy 4.x](https://forum.pjrc.com/index.php?threads/using-bmm270-accel-gyro-and-bmi150-magnetomer-sensors-with-teensy-4-x.76123/)
+
+* Using the Giga: https://forum.arduino.cc/t/experimenting-wonder-if-giga-can-support-multiple-usb-serial-objects/1323753/6?u=merlin513
+
+Three additional Methods have been added to each sensor:
+
+**void getScales(float *accScale, float *gyroScale, float *magScale)**
+
+**bool Read(float *calValues_)**
+
+**bool Read_raw(int16_t *rawValues_)**
 
 
 ### ICM-20948
@@ -78,7 +87,7 @@ True is returned on succesfully setting the digital low pass filters, otherwise,
 | 119 Hz | GYRO_DLPF_BANDWIDTH_119HZ |
 | 51 Hz | GYRO_DLPF_BANDWIDTH_51HZ |
 | 23 Hz | GYRO_DLPF_BANDWIDTH_23HZ |
-| 11 Hz | ACCEL_DLPF_BANDWIDTH_11HZ |
+| 11 Hz | GYRO_DLPF_BANDWIDTH_11HZ |
 | 5 Hz | GYRO_DLPF_BANDWIDTH_5HZ |
 
 True is returned on succesfully setting the digital low pass filters, otherwise, false is returned. The default bandwidth is 361 Hz.
