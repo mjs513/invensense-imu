@@ -11,9 +11,34 @@
    * [Invensense MPU-6050](https://invensense.tdk.com/products/motion-tracking/6-axis/mpu-6050/)
 
 @mjs513 added the following:
-   * Additional examples for using Madgwick's new Fusion for the MPU-9250, ICM-20948 and MPU-6050 w/HMC5983 Magnetometer and ICM-20649 w/LIS3MDL
+   * Additional examples for using Madgwick's new Fusion for the MPU-9250, ICM-20948 and MPU-6050 w/HMC5983 Magnetometer and ICM-20649 w/LIS3MDL\
+   \
+   **ICM-20649** examples folder:\
+   **EXTMAG_Fusionv1** shows how you can use 6-point calibration using a
+   LIS3MDL or a HMC5983\
+   \
+   **ICM-20948** examples folder:\
+   **ICM20948_Fusionv1** - Fusion example for the ICM20948\
+   **ICM20948_Fusionv1_Giga** - Fusion example for the ICM20948 using the Arduino Giga R1 with Dual Serial support
+   \
+   \
+   **MPU-9250** examples folder:\
+   **MPU9250_Fusion_GIGA**\
+   **MPU9250_Fusionv1**\
+   **MPU9250_Fusionv1_MPU9250_Fusionv1_GIGA_dual_serial**\
+   
    * Filter implementation for the MPU9250 (Madgwick, Mahoney, Complimentary, DCM, and kalman.
-   * Calibration examples for 6-point method and using PJRC MotionCal software
+   * Calibration examples for 6-point method and using PJRC MotionCal software\
+   In the calibration folder of the examples there are several sketches
+   \
+   **CalAnalysisInvenseVer4** - provides 6-point calibration for the accelerometer and the magnetometer.\
+   \
+   **CalAnalysisInvenseVer4_GIGA** - is the 6-point calibration sketch for the giga which removes EEPROM.\
+   \
+   **CalibrateSensors_ICM20948_MotionCal** and **CalibrateSensors_MPU9250_MotionCal** examples are provided to interface to PJRC's MotionCal software\
+   \
+   **CalibrateSensors_MPU6050_MotionCal_extmag** - provides support for external sensor (HMC5983 and LIS3MDL) for the MPU-6050 and the ICM-20649
+   
    
    List of dependencies:
    * [BolderFlight Units Library](https://github.com/bolderflight/units)
