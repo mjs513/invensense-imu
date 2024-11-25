@@ -152,7 +152,7 @@ The ICM-20649 is a extended range accelerometer and gyroscope in a single device
 The following selectable full scale sensor ranges are available:
 
 | Gyroscope Full Scale Range | Accelerometer Full Scale Range | 
-| --- | --- | ---  |
+| --- | --- |
 | +/- 250 deg/s  | +/- 2g  | 
 | +/- 500 deg/s  | +/- 4g  |
 | +/- 1000 deg/s | +/- 8g  |
